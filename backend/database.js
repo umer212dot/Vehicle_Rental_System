@@ -8,10 +8,4 @@ const pool = new Pool({
     database: 'Vehicle_Management_System'
 })
 
-// pool.query('SELECT * FROM vehicle').then(res => {
-//     console.log(res.rows[0].model)
-// }).catch(err => {
-//     console.error(err)
-// })
-
 module.exports = pool
