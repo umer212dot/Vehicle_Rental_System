@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import Navbar from "./Navbar"
 
 const SearchPage = () => {
   // Sample data for dropdowns
