@@ -1,4 +1,6 @@
 CREATE TYPE rental_status AS ENUM ('Ongoing', 'Completed', 'Cancelled');
+ALTER TYPE rental_status ADD VALUE 'Pending';
+
 CREATE TYPE payment_status AS ENUM ('Pending', 'Completed', 'Failed');
 CREATE TYPE user_type AS ENUM ('Customer', 'Admin');
 -- Table: public.users
