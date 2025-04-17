@@ -64,7 +64,7 @@ app.get('/models/:brand', async (req, res) => {
 
 app.get('/search', async (req, res) => {
   try {
-    let {brand,model,type,color,transmission,minPrice, maxPrice} = req.query;
+    let {brand,model,type,color,transmission,minPrice, maxPrice,availability} = req.query;
 
     // Set default price range
     minPrice = minPrice ? parseInt(minPrice) : 0;
@@ -95,12 +95,16 @@ app.get('/search', async (req, res) => {
       values.push(transmission);
       whereClauses.push(`transmission = $${values.length}`);
     }
+    if(availability){
+      values.push(availability);
+      whereClauses.push(`availability = $${values.length}`);
+    }
 
     const query = `
       SELECT * FROM vehicle
       WHERE ${whereClauses.join(' AND ')}
     `
-
+    console.log(query)
     const searchResults = await pool.query(query, values);
     res.json(searchResults.rows);
   } catch (error) {
