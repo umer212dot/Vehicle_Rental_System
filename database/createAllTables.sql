@@ -1,5 +1,6 @@
 CREATE TYPE rental_status AS ENUM ('Ongoing', 'Completed', 'Cancelled');
 ALTER TYPE rental_status ADD VALUE 'Pending';
+ALTER TYPE rental_status ADD VALUE 'Awaiting Approval';
 
 CREATE TYPE payment_status AS ENUM ('Pending', 'Completed', 'Failed');
 CREATE TYPE user_type AS ENUM ('Customer', 'Admin');
@@ -98,7 +99,8 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public.rental
     OWNER to postgres;
-
+ALTER TABLE public.rental
+ADD COLUMN IF NOT EXISTS total_fee numeric(10,2);
 -- Table: public.payment
 -- DROP TABLE IF EXISTS public.payment;
 
@@ -149,6 +151,10 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public.review
     OWNER to postgres;
+
+ALTER TABLE review
+ALTER COLUMN review_date TYPE date USING review_date::date,
+ALTER COLUMN review_date SET DEFAULT CURRENT_DATE;
 
 -- Table: public.maintenance_record
 -- DROP TABLE IF EXISTS public.maintenance_record;

@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useLocation } from "react-router-dom"
+import CarDetailsCard from "./CarDetailsCard"
 
 const SearchPage = () => {
   // Sample data for dropdowns
@@ -42,6 +44,48 @@ const SearchPage = () => {
 
   // State to track if search has been performed
   const [hasSearched, setHasSearched] = useState(false)
+
+  // Get location to check for direct booking requests
+  const location = useLocation()
+  const [selectedVehicleId, setSelectedVehicleId] = useState(null)
+  
+  useEffect(() => {
+    // Check if we have a vehicle to book from the reviews page
+    if (location.state?.selectedVehicleId && location.state?.bookNow) {
+      const vehicleId = location.state.selectedVehicleId
+      setSelectedVehicleId(vehicleId)
+      
+      // Fetch the specific vehicle and show it in results
+      fetchVehicle(vehicleId)
+    }
+  }, [location])
+  
+  // Fetch a specific vehicle by ID
+  const fetchVehicle = async (vehicleId) => {
+    try {
+      setIsLoading(true)
+      setHasSearched(true)
+      
+      const response = await fetch(`http://localhost:3060/search?availability=true`)
+      if (response.ok) {
+        const allVehicles = await response.json()
+        
+        // Filter to find the specific vehicle
+        const vehicle = allVehicles.find(v => v.vehicle_id.toString() === vehicleId.toString())
+        
+        if (vehicle) {
+          setSearchResults([vehicle])
+        } else {
+          setSearchResults([])
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching vehicle:", error)
+      setSearchResults([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   // Handle input changes
   const handleInputChange = (e) => {
@@ -125,154 +169,156 @@ const SearchPage = () => {
       <div className="container mx-auto px-4 py-8 pt-4">
         <h1 className="text-2xl font-bold mb-6">Search Available Cars</h1>
 
-        {/* Search Form */}
-        <form onSubmit={handleSearch} className="bg-white p-6 rounded-lg shadow-md mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Brand Dropdown */}
-            <div className="flex flex-col">
-              <label className="mb-2 font-medium text-gray-700">Brand:</label>
-              <select
-                name="brand"
-                value={formData.brand}
-                onChange={handleInputChange}
-                className="border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={isLoading}
-              >
-                <option value="">Select a Brand</option>
-                {brands.map((brand, index) => (
-                  <option key={index} value={brand}>
-                    {brand}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Model Input */}
-            <div className="flex flex-col">
-              <label className="mb-2 font-medium text-gray-700">Model:</label>
-              <select
-                name="model"
-                value={formData.model}
-                onChange={handleInputChange}
-                className="border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={isLoading}
-              >
-                <option value="">Select a Model</option>
-                {models.map((model, index) => (
-                  <option key={index} value={model}>
-                    {model}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Type Dropdown */}
-            <div className="flex flex-col">
-              <label className="mb-2 font-medium text-gray-700">Type:</label>
-              <select
-                name="type"
-                value={formData.type}
-                onChange={handleInputChange}
-                className="border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={isLoading}
-              >
-                <option value="">Select a Type</option>
-                {types.map((type, index) => (
-                  <option key={index} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Color Dropdown */}
-            <div className="flex flex-col">
-              <label className="mb-2 font-medium text-gray-700">Color:</label>
-              <select
-                name="color"
-                value={formData.color}
-                onChange={handleInputChange}
-                className="border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={isLoading}
-              >
-                <option value="">Select a Color</option>
-                {colors.map((color, index) => (
-                  <option key={index} value={color}>
-                    {color}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Transmission Dropdown */}
-            <div className="flex flex-col">
-              <label className="mb-2 font-medium text-gray-700">Transmission:</label>
-              <select
-                name="transmission"
-                value={formData.transmission}
-                onChange={handleInputChange}
-                className="border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={isLoading}
-              >
-                <option value="">Select a Transmission</option>
-                {transmissions.map((transmission, index) => (
-                  <option key={index} value={transmission}>
-                    {transmission}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Price Range */}
-            <div className="flex flex-col">
-              <label className="mb-2 font-medium text-gray-700">Price Range:</label>
-              <div className="flex space-x-2">
-                <input
-                  type="number"
-                  name="minPrice"
-                  value={formData.minPrice}
+        {/* Only show search form if not directly booking a vehicle */}
+        {!selectedVehicleId && (
+          <form onSubmit={handleSearch} className="bg-white p-6 rounded-lg shadow-md mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Brand Dropdown */}
+              <div className="flex flex-col">
+                <label className="mb-2 font-medium text-gray-700">Brand:</label>
+                <select
+                  name="brand"
+                  value={formData.brand}
                   onChange={handleInputChange}
-                  placeholder="Min $"
-                  className="border border-gray-300 rounded-md p-2 w-1/2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isLoading}
+                >
+                  <option value="">Select a Brand</option>
+                  {brands.map((brand, index) => (
+                    <option key={index} value={brand}>
+                      {brand}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Model Input */}
+              <div className="flex flex-col">
+                <label className="mb-2 font-medium text-gray-700">Model:</label>
+                <select
+                  name="model"
+                  value={formData.model}
+                  onChange={handleInputChange}
+                  className="border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isLoading}
+                >
+                  <option value="">Select a Model</option>
+                  {models.map((model, index) => (
+                    <option key={index} value={model}>
+                      {model}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Type Dropdown */}
+              <div className="flex flex-col">
+                <label className="mb-2 font-medium text-gray-700">Type:</label>
+                <select
+                  name="type"
+                  value={formData.type}
+                  onChange={handleInputChange}
+                  className="border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isLoading}
+                >
+                  <option value="">Select a Type</option>
+                  {types.map((type, index) => (
+                    <option key={index} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Color Dropdown */}
+              <div className="flex flex-col">
+                <label className="mb-2 font-medium text-gray-700">Color:</label>
+                <select
+                  name="color"
+                  value={formData.color}
+                  onChange={handleInputChange}
+                  className="border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isLoading}
+                >
+                  <option value="">Select a Color</option>
+                  {colors.map((color, index) => (
+                    <option key={index} value={color}>
+                      {color}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Transmission Dropdown */}
+              <div className="flex flex-col">
+                <label className="mb-2 font-medium text-gray-700">Transmission:</label>
+                <select
+                  name="transmission"
+                  value={formData.transmission}
+                  onChange={handleInputChange}
+                  className="border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isLoading}
+                >
+                  <option value="">Select a Transmission</option>
+                  {transmissions.map((transmission, index) => (
+                    <option key={index} value={transmission}>
+                      {transmission}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Price Range */}
+              <div className="flex flex-col">
+                <label className="mb-2 font-medium text-gray-700">Price Range:</label>
+                <div className="flex space-x-2">
+                  <input
+                    type="number"
+                    name="minPrice"
+                    value={formData.minPrice}
+                    onChange={handleInputChange}
+                    placeholder="Min $"
+                    className="border border-gray-300 rounded-md p-2 w-1/2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isLoading}
+                  />
+                  <input
+                    type="number"
+                    name="maxPrice"
+                    value={formData.maxPrice}
+                    onChange={handleInputChange}
+                    placeholder="Max $"
+                    className="border border-gray-300 rounded-md p-2 w-1/2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+
+              {/* Availability Checkbox */}
+              <div className="flex items-center mt-6">
+                <input
+                  type="checkbox"
+                  name="availability"
+                  checked={formData.availability}
+                  onChange={handleInputChange}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   disabled={isLoading}
                 />
-                <input
-                  type="number"
-                  name="maxPrice"
-                  value={formData.maxPrice}
-                  onChange={handleInputChange}
-                  placeholder="Max $"
-                  className="border border-gray-300 rounded-md p-2 w-1/2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={isLoading}
-                />
+                <label className="ml-2 font-medium text-gray-700">Show only available cars</label>
               </div>
             </div>
 
-            {/* Availability Checkbox */}
-            <div className="flex items-center mt-6">
-              <input
-                type="checkbox"
-                name="availability"
-                checked={formData.availability}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            {/* Search Button */}
+            <div className="mt-6">
+              <button
+                type="submit"
+                className="bg-black text-white py-2 px-6 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900"
                 disabled={isLoading}
-              />
-              <label className="ml-2 font-medium text-gray-700">Show only available cars</label>
+              >
+                {isLoading ? "Searching..." : "Search Car"}
+              </button>
             </div>
-          </div>
-
-          {/* Search Button */}
-          <div className="mt-6">
-            <button
-              type="submit"
-              className="bg-black text-white py-2 px-6 rounded-md hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900"
-              disabled={isLoading}
-            >
-              {isLoading ? "Searching..." : "Search Car"}
-            </button>
-          </div>
-        </form>
+          </form>
+        )}
 
         {/* Loading indicator */}
         {isLoading && (
@@ -284,70 +330,23 @@ const SearchPage = () => {
         {/* Search Results */}
         {hasSearched && !isLoading && (
           <div className="mt-8">
-            <h2 className="text-xl font-semibold mb-4">Search Results</h2>
+            <h2 className="text-xl font-semibold mb-4">
+              {selectedVehicleId ? "Selected Vehicle" : "Search Results"}
+            </h2>
             {searchResults.length === 0 ? (
-              <p className="text-gray-500">No cars found matching your criteria.</p>
+              <p className="text-gray-500">
+                {selectedVehicleId 
+                  ? "The selected vehicle is not available for booking."
+                  : "No cars found matching your criteria."}
+              </p>
             ) : (
               <div className="space-y-6">
                 {searchResults.map((car) => (
-                  <div key={car.vehicle_id} className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col md:flex-row">
-                    {/* Car Image */}
-                    <div className="md:w-1/3 h-64 md:h-auto">
-                      <img
-                        src={car.image_path || "https://via.placeholder.com/300x200?text=No+Image"}
-                        alt={`${car.brand} ${car.model}`}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-
-                    {/* Car Details */}
-                    <div className="p-6 md:w-2/3">
-                      <div className="mb-4">
-                        <h3 className="text-2xl font-bold text-blue-600">
-                          {car.brand} - {car.model}
-                        </h3>
-                        <p className="text-lg text-gray-600">
-                          {car.brand} {car.model}
-                        </p>
-                      </div>
-
-                      <div className="border-t border-b py-4 my-4">
-                        <div className="flex flex-wrap gap-x-6 gap-y-2 text-gray-700">
-                          <p>
-                            <span className="font-medium">Price:</span> ${car.price_per_day}
-                          </p>
-                          <p>
-                            <span className="font-medium">Color:</span> {car.color}
-                          </p>
-                          <p>
-                            <span className="font-medium">Transmission:</span> {car.transmission}
-                          </p>
-                          <p>
-                            <span className="font-medium">Type:</span> {car.type}
-                          </p>
-                          <p>
-                            <span className="font-medium">Year:</span> {car.year}
-                          </p>
-                          <p>
-                            <span className="font-medium">Available:</span> {car.availability ? "Yes" : "No"}
-                          </p>
-                        </div>
-                      </div>
-                      {car.availability ? (
-                      <div className="mt-4 flex justify-end">
-                        <button className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                          Book Now
-                        </button>
-                      </div>
-                      ) : (
-                        <div className="mt-4 flex justify-end">
-                          <button className="bg-gray-400 text-white py-2 px-4 rounded hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                            Not Available
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <CarDetailsCard 
+                    key={car.vehicle_id} 
+                    car={car} 
+                    autoOpenBooking={selectedVehicleId === car.vehicle_id.toString()}
+                  />
                 ))}
               </div>
             )}

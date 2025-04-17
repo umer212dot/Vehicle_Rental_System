@@ -6,12 +6,18 @@ import Layout from "./components/Layout"
 import Dashboard from "./components/Dashboard"
 import Bookings from "./components/Bookings"
 import Logout from "./components/Logout"
+import Login from "./components/Login"
+import Payment from "./components/Payment"
+import VehicleReviews from "./components/VehicleReviews"
 
 function App() {
   return (
     <div className="App">
       <Router>
         <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/payment" element={<Payment />} />
+          <Route path="/vehicle/:vehicleId/reviews" element={<VehicleReviews />} />
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/bookings" element={<Bookings />} />
