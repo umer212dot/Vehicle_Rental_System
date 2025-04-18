@@ -391,26 +391,12 @@ app.post('/payments', async (req, res) => {
     );
     
     // If payment status is Completed, update rental status to Ongoing
+    // The database trigger will automatically mark the vehicle as unavailable
     if (payment_status === 'Completed') {
       await pool.query(
         'UPDATE rental SET status = $1 WHERE rental_id = $2',
         ['Ongoing', rental_id]
       );
-      
-      // Mark the vehicle as unavailable
-      const rentalResult = await pool.query(
-        'SELECT vehicle_id FROM rental WHERE rental_id = $1',
-        [rental_id]
-      );
-      
-      if (rentalResult.rows.length > 0) {
-        const { vehicle_id } = rentalResult.rows[0];
-        
-        await pool.query(
-          'UPDATE vehicle SET availability = false WHERE vehicle_id = $1',
-          [vehicle_id]
-        );
-      }
     }
     
     res.status(201).json(newPayment.rows[0]);
@@ -476,9 +462,10 @@ app.get('/reviews/check', async (req, res) => {
 // Update rental status from 'Ongoing' to 'Completed' when return date has passed
 app.put('/rentals/update-status', async (req, res) => {
   try {
-    // const currentDate = new Date().toISOString().split('T')[0]; // Get current date in YYYY-MM-DD format
-    const currentDate = new Date(2026,4,20)
+    const currentDate = new Date().toISOString().split('T')[0]; // Get current date in YYYY-MM-DD format
+    // const currentDate = new Date(2026,4,20)
     // Find rentals that are 'Ongoing' and have return dates before or equal to current date
+    // The database trigger will automatically update vehicle availability
     const updateResult = await pool.query(
       `UPDATE rental 
        SET status = 'Completed' 
@@ -486,20 +473,6 @@ app.put('/rentals/update-status', async (req, res) => {
        RETURNING rental_id, vehicle_id`,
       [currentDate]
     );
-    
-    // Update vehicle availability for completed rentals
-    if (updateResult.rows.length > 0) {
-      // Extract vehicle IDs from completed rentals
-      const vehicleIds = updateResult.rows.map(row => row.vehicle_id);
-      
-      // Update vehicle availability to true (available)
-      await pool.query(
-        `UPDATE vehicle 
-         SET availability = true 
-         WHERE vehicle_id = ANY($1)`,
-        [vehicleIds]
-      );
-    }
     
     res.json({ 
       updated: updateResult.rows.length,
