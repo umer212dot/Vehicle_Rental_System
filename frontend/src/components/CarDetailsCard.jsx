@@ -7,9 +7,16 @@ const CarDetailsCard = ({ car, autoOpenBooking = false }) => {
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [rating, setRating] = useState({ average: 0, count: 0 });
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Check if user is admin
+    const userRole = localStorage.getItem('userRole');
+    if (userRole === 'Admin') {
+      setIsAdmin(true);
+    }
+    
     // Fetch the rating for this car
     const fetchRating = async () => {
       try {
@@ -33,7 +40,7 @@ const CarDetailsCard = ({ car, autoOpenBooking = false }) => {
     fetchRating();
     
     // Auto-open booking modal if directed from reviews page
-    if (autoOpenBooking && car.availability) {
+    if (autoOpenBooking && car.availability && !isAdmin) {
       const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
       const customerId = localStorage.getItem('customerId');
       
@@ -41,7 +48,7 @@ const CarDetailsCard = ({ car, autoOpenBooking = false }) => {
         setIsBookingModalOpen(true);
       }
     }
-  }, [car.vehicle_id, autoOpenBooking, car.availability]);
+  }, [car.vehicle_id, autoOpenBooking, car.availability, isAdmin]);
 
   const handleBookNowClick = () => {
     // Check if the user is logged in by checking localStorage
@@ -168,18 +175,18 @@ const CarDetailsCard = ({ car, autoOpenBooking = false }) => {
             </Link>
           )}
           
-          {car.availability ? (
+          {!isAdmin && car.availability ? (
             <button 
               className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               onClick={handleBookNowClick}
             >
               Book Now
             </button>
-          ) : (
+          ) : !isAdmin && !car.availability ? (
             <button className="bg-gray-400 text-white py-2 px-4 rounded hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
               Not Available
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
