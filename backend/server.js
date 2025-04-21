@@ -409,10 +409,10 @@ app.post('/payments', async (req, res) => {
 // Submit review
 app.post('/reviews', async (req, res) => {
   try {
-    const { customer_id, vehicle_id, rating, comments } = req.body;
+    const { rental_id, rating, comments } = req.body;
     
     // Validate required fields
-    if (!customer_id || !vehicle_id || !rating) {
+    if (!rental_id || !rating) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
@@ -423,8 +423,8 @@ app.post('/reviews', async (req, res) => {
     
     // Insert review
     const newReview = await pool.query(
-      'INSERT INTO review (customer_id, vehicle_id, rating, comments) VALUES ($1, $2, $3, $4) RETURNING *',
-      [customer_id, vehicle_id, rating, comments]
+      'INSERT INTO review (rental_id, rating, comments) VALUES ($1, $2, $3) RETURNING *',
+      [rental_id, rating, comments]
     );
     
     res.status(201).json(newReview.rows[0]);
@@ -434,20 +434,20 @@ app.post('/reviews', async (req, res) => {
   }
 });
 
-// Check if customer has already reviewed a vehicle
+// Check if a rental has been reviewed
 app.get('/reviews/check', async (req, res) => {
   try {
-    const { customer_id, vehicle_id } = req.query;
+    const { rental_id } = req.query;
     
     // Validate required fields
-    if (!customer_id || !vehicle_id) {
+    if (!rental_id) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
     // Check if review exists
     const reviewCheck = await pool.query(
-      'SELECT * FROM review WHERE customer_id = $1 AND vehicle_id = $2',
-      [customer_id, vehicle_id]
+      'SELECT * FROM review WHERE rental_id = $1',
+      [rental_id]
     );
     
     res.json({ 
@@ -462,8 +462,8 @@ app.get('/reviews/check', async (req, res) => {
 // Update rental status from 'Ongoing' to 'Completed' when return date has passed
 app.put('/rentals/update-status', async (req, res) => {
   try {
-    const currentDate = new Date().toISOString().split('T')[0]; // Get current date in YYYY-MM-DD format
-    // const currentDate = new Date(2026,4,20)
+    // const currentDate = new Date().toISOString().split('T')[0]; // Get current date in YYYY-MM-DD format
+    const currentDate = new Date(2026,4,20)
     // Find rentals that are 'Ongoing' and have return dates before or equal to current date
     // The database trigger will automatically update vehicle availability
     const updateResult = await pool.query(
@@ -492,10 +492,11 @@ app.get('/vehicles/:vehicle_id/rating', async (req, res) => {
     // Get average rating and count of reviews
     const ratingResult = await pool.query(
       `SELECT 
-        COALESCE(AVG(rating), 0) as average_rating, 
+        COALESCE(AVG(r.rating), 0) as average_rating, 
         COUNT(*) as review_count 
-      FROM review 
-      WHERE vehicle_id = $1`,
+      FROM review r
+      JOIN rental rt ON r.rental_id = rt.rental_id
+      WHERE rt.vehicle_id = $1`,
       [vehicle_id]
     );
     
@@ -524,11 +525,12 @@ app.get('/vehicles/:vehicle_id/reviews', async (req, res) => {
         r.rating, 
         r.comments, 
         r.review_date,
-        c.customer_id,
+        rt.customer_id,
         c.name as customer_name
       FROM review r
-      JOIN customer c ON r.customer_id = c.customer_id
-      WHERE r.vehicle_id = $1
+      JOIN rental rt ON r.rental_id = rt.rental_id
+      JOIN customer c ON rt.customer_id = c.customer_id
+      WHERE rt.vehicle_id = $1
       ORDER BY r.review_date DESC`,
       [vehicle_id]
     );

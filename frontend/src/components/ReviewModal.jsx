@@ -29,7 +29,7 @@ function ReviewModal({ isOpen, onClose, onSubmit, vehicle }) {
             return;
         }
         
-        // Submit review
+        // Submit review with rental_id (this will be handled by the parent component)
         onSubmit({ rating, comments });
         
         // Reset form
