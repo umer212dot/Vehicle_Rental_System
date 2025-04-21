@@ -130,18 +130,13 @@ ALTER TABLE IF EXISTS public.payment
 CREATE TABLE IF NOT EXISTS public.review
 (
     review_id serial NOT NULL,
-    customer_id integer,
-    vehicle_id integer,
+    rental_id integer,
     rating integer,
     comments text COLLATE pg_catalog."default",
     review_date timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT review_pkey PRIMARY KEY (review_id),
-    CONSTRAINT review_customer_id_fkey FOREIGN KEY (customer_id)
-        REFERENCES public.customer (customer_id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE CASCADE,
-    CONSTRAINT review_vehicle_id_fkey FOREIGN KEY (vehicle_id)
-        REFERENCES public.vehicle (vehicle_id) MATCH SIMPLE
+    CONSTRAINT review_rental_id_fkey FOREIGN KEY (rental_id)
+        REFERENCES public.rental (rental_id) MATCH SIMPLE
         ON UPDATE NO ACTION
         ON DELETE CASCADE,
     CONSTRAINT review_rating_check CHECK (rating >= 1 AND rating <= 5)

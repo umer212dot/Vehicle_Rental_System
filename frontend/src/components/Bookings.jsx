@@ -276,8 +276,7 @@ function Bookings() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    customer_id: selectedBooking.customer_id,
-                    vehicle_id: selectedBooking.vehicle_id,
+                    rental_id: selectedBooking.rental_id,
                     rating: reviewData.rating,
                     comments: reviewData.comments
                 }),
@@ -329,7 +328,7 @@ function Bookings() {
         
         try {
             await Promise.all(completedBookings.map(async (booking) => {
-                const response = await fetch(`http://localhost:3060/reviews/check?customer_id=${customerId}&vehicle_id=${booking.vehicle_id}`);
+                const response = await fetch(`http://localhost:3060/reviews/check?rental_id=${booking.rental_id}`);
                 
                 if (response.ok) {
                     const data = await response.json();
