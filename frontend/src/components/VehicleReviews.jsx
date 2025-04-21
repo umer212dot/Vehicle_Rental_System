@@ -8,11 +8,18 @@ function VehicleReviews() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [rating, setRating] = useState({ average: 0, count: 0 });
+    const [isAdmin, setIsAdmin] = useState(false);
     
     const { vehicleId } = useParams();
     const navigate = useNavigate();
     
     useEffect(() => {
+        // Check if user is admin
+        const userRole = localStorage.getItem('userRole');
+        if (userRole === 'Admin') {
+            setIsAdmin(true);
+        }
+        
         fetchVehicleReviews();
         fetchVehicleRating();
     }, [vehicleId]);
@@ -208,12 +215,14 @@ function VehicleReviews() {
                             </div>
                             <div className="flex justify-between items-center">
                                 <p className="text-2xl font-bold text-gray-800">${vehicle.price_per_day}/day</p>
-                                <button 
-                                    onClick={handleRentNowClick}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                                >
-                                    Rent Now
-                                </button>
+                                {!isAdmin && (
+                                    <button 
+                                        onClick={handleRentNowClick}
+                                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                                    >
+                                        Rent Now
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>

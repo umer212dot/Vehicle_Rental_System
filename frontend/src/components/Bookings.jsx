@@ -417,14 +417,8 @@ function Bookings() {
                     </>
                 );
             } else {
-                return (
-                    <button 
-                        onClick={() => handleGenerateInvoice(booking)}
-                        className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
-                    >
-                        Generate Invoice
-                    </button>
-                );
+                // No actions for other statuses when admin
+                return null;
             }
         } else {
             // Customer actions

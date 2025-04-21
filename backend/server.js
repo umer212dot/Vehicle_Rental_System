@@ -462,8 +462,8 @@ app.get('/reviews/check', async (req, res) => {
 // Update rental status from 'Ongoing' to 'Completed' when return date has passed
 app.put('/rentals/update-status', async (req, res) => {
   try {
-    // const currentDate = new Date().toISOString().split('T')[0]; // Get current date in YYYY-MM-DD format
-    const currentDate = new Date(2026,4,20)
+    const currentDate = new Date().toISOString().split('T')[0]; // Get current date in YYYY-MM-DD format
+    // const currentDate = new Date(2026,4,20)
     // Find rentals that are 'Ongoing' and have return dates before or equal to current date
     // The database trigger will automatically update vehicle availability
     const updateResult = await pool.query(
