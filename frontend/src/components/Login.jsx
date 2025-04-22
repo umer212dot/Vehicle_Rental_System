@@ -8,6 +8,7 @@ const Login = () => {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [debugInfo, setDebugInfo] = useState('');
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -23,9 +24,12 @@ const Login = () => {
     e.preventDefault();
     setError('');
     setSuccessMessage('');
+    setDebugInfo('');
     setLoading(true);
     
     try {
+      setDebugInfo('Attempting to connect to backend at http://localhost:3060/login...');
+      
       const response = await fetch('http://localhost:3060/login', {
         method: 'POST',
         headers: {
@@ -34,11 +38,17 @@ const Login = () => {
         body: JSON.stringify({ email, password }),
       });
       
+      setDebugInfo(prev => prev + '\nConnection successful! Received response from server.');
+      
       const data = await response.json();
+      
+      setDebugInfo(prev => prev + '\nParsed response data successfully.');
       
       if (!response.ok) {
         throw new Error(data.error || 'Login failed');
       }
+      
+      setDebugInfo(prev => prev + '\nLogin successful, storing user data...');
       
       // Store user data in localStorage
       localStorage.setItem('userId', data.user_id);
@@ -55,7 +65,15 @@ const Login = () => {
         navigate('/');
       }
     } catch (err) {
-      setError(err.message || 'Login failed. Please try again.');
+      console.error('Login error:', err);
+      
+      if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+        setDebugInfo(prev => prev + '\nERROR: Could not connect to the backend server. The server may not be running.');
+        setError('Failed to fetch');
+      } else {
+        setDebugInfo(prev => prev + `\nERROR: ${err.name}: ${err.message}`);
+        setError(`Login failed: ${err.message}`);
+      }
     } finally {
       setLoading(false);
     }
