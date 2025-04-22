@@ -5,8 +5,20 @@ const pool = require('./database')
 const port = 3060
 
 //middleware
-app.use(cors())
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://localhost:3001'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}))
 app.use(express.json())
+app.use(express.urlencoded({ extended: true }))
+
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
+  next();
+});
 
 //insert
 app.post('/test', async (req, res) => {
@@ -262,6 +274,96 @@ app.put('/rentals/:rental_id/reject', async (req, res) => {
   }
 });
 
+// User registration
+app.post('/register', async (req, res) => {
+  try {
+    console.log('Registration request received:', req.body);
+    const { email, password, role, name, phone, licenseNumber } = req.body;
+
+    // Validate required fields
+    if (!email || !password || !role || !name) {
+      console.log('Missing required fields');
+      return res.status(400).json({ error: 'Required fields are missing' });
+    }
+
+    // Validate role
+    if (role !== 'Customer' && role !== 'Admin') {
+      console.log('Invalid role:', role);
+      return res.status(400).json({ error: 'Invalid role. Must be Customer or Admin' });
+    }
+
+    // Additional validation for Customer role
+    if (role === 'Customer' && (!phone || !licenseNumber)) {
+      console.log('Missing customer fields');
+      return res.status(400).json({ error: 'Phone and license number are required for customers' });
+    }
+
+    // Check if user with this email already exists
+    const existingUser = await pool.query(
+      'SELECT * FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (existingUser.rows.length > 0) {
+      console.log('Email already registered:', email);
+      return res.status(400).json({ error: 'Email already registered' });
+    }
+
+    // Start a transaction
+    const client = await pool.connect();
+    console.log('Starting transaction');
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Insert user record
+      console.log('Inserting user record');
+      const userResult = await client.query(
+        'INSERT INTO users (email, password_hash, role, created_at) VALUES ($1, $2, $3, CURRENT_TIMESTAMP) RETURNING *',
+        [email, password, role]
+      );
+      
+      const userId = userResult.rows[0].user_id;
+      console.log('User created with ID:', userId);
+      
+      // If user is a Customer, insert customer record
+      if (role === 'Customer') {
+        console.log('Inserting customer record');
+        await client.query(
+          'INSERT INTO customer (name, email, phone, license_number, user_id) VALUES ($1, $2, $3, $4, $5)',
+          [name, email, phone, licenseNumber, userId]
+        );
+      } 
+      // If user is an Admin, insert admin record
+      else if (role === 'Admin') {
+        console.log('Inserting admin record');
+        await client.query(
+          'INSERT INTO admin (name, email, user_id) VALUES ($1, $2, $3)',
+          [name, email, userId]
+        );
+      }
+      
+      await client.query('COMMIT');
+      console.log('Transaction committed successfully');
+      
+      res.status(201).json({ 
+        message: 'Registration successful', 
+        userId: userId 
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Transaction error, rolled back:', error);
+      throw error;
+    } finally {
+      client.release();
+      console.log('Client released');
+    }
+  } catch (error) {
+    console.error('Error during registration:', error);
+    res.status(500).json({ error: 'Registration failed', details: error.message });
+  }
+});
+
 // User login
 app.post('/login', async (req, res) => {
   try {
@@ -409,10 +511,10 @@ app.post('/payments', async (req, res) => {
 // Submit review
 app.post('/reviews', async (req, res) => {
   try {
-    const { rental_id, rating, comments } = req.body;
+    const { customer_id, vehicle_id, rating, comments } = req.body;
     
     // Validate required fields
-    if (!rental_id || !rating) {
+    if (!customer_id || !vehicle_id || !rating) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
@@ -423,8 +525,8 @@ app.post('/reviews', async (req, res) => {
     
     // Insert review
     const newReview = await pool.query(
-      'INSERT INTO review (rental_id, rating, comments) VALUES ($1, $2, $3) RETURNING *',
-      [rental_id, rating, comments]
+      'INSERT INTO review (customer_id, vehicle_id, rating, comments) VALUES ($1, $2, $3, $4) RETURNING *',
+      [customer_id, vehicle_id, rating, comments]
     );
     
     res.status(201).json(newReview.rows[0]);
@@ -434,20 +536,20 @@ app.post('/reviews', async (req, res) => {
   }
 });
 
-// Check if a rental has been reviewed
+// Check if customer has already reviewed a vehicle
 app.get('/reviews/check', async (req, res) => {
   try {
-    const { rental_id } = req.query;
+    const { customer_id, vehicle_id } = req.query;
     
     // Validate required fields
-    if (!rental_id) {
+    if (!customer_id || !vehicle_id) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
     // Check if review exists
     const reviewCheck = await pool.query(
-      'SELECT * FROM review WHERE rental_id = $1',
-      [rental_id]
+      'SELECT * FROM review WHERE customer_id = $1 AND vehicle_id = $2',
+      [customer_id, vehicle_id]
     );
     
     res.json({ 
@@ -492,11 +594,10 @@ app.get('/vehicles/:vehicle_id/rating', async (req, res) => {
     // Get average rating and count of reviews
     const ratingResult = await pool.query(
       `SELECT 
-        COALESCE(AVG(r.rating), 0) as average_rating, 
+        COALESCE(AVG(rating), 0) as average_rating, 
         COUNT(*) as review_count 
-      FROM review r
-      JOIN rental rt ON r.rental_id = rt.rental_id
-      WHERE rt.vehicle_id = $1`,
+      FROM review 
+      WHERE vehicle_id = $1`,
       [vehicle_id]
     );
     
@@ -525,12 +626,11 @@ app.get('/vehicles/:vehicle_id/reviews', async (req, res) => {
         r.rating, 
         r.comments, 
         r.review_date,
-        rt.customer_id,
+        c.customer_id,
         c.name as customer_name
       FROM review r
-      JOIN rental rt ON r.rental_id = rt.rental_id
-      JOIN customer c ON rt.customer_id = c.customer_id
-      WHERE rt.vehicle_id = $1
+      JOIN customer c ON r.customer_id = c.customer_id
+      WHERE r.vehicle_id = $1
       ORDER BY r.review_date DESC`,
       [vehicle_id]
     );

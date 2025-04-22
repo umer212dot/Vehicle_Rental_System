@@ -7,8 +7,12 @@ import Dashboard from "./components/Dashboard"
 import Bookings from "./components/Bookings"
 import Logout from "./components/Logout"
 import Login from "./components/Login"
+import Register from "./components/Register"
 import Payment from "./components/Payment"
 import VehicleReviews from "./components/VehicleReviews"
+import AdminLayout from "./components/AdminLayout"
+import AdminDashboard from "./components/AdminDashboard"
+import MaintenanceManagement from "./components/MaintenanceManagement"
 
 function App() {
   return (
@@ -16,8 +20,17 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
           <Route path="/payment" element={<Payment />} />
           <Route path="/vehicle/:vehicleId/reviews" element={<VehicleReviews />} />
+
+          {/* Admin Routes */}
+          <Route element={<AdminLayout />}>
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
+            <Route path="/admin/maintenance" element={<MaintenanceManagement />} />
+          </Route>
+
+          {/* Customer Routes */}
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/bookings" element={<Bookings />} />
