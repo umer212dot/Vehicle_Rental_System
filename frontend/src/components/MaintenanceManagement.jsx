@@ -17,15 +17,14 @@ const MaintenanceManagement = () => {
   const handleSubmit = () => {
     if (selectedOption) {
       if (selectedOption === 'track') {
-        // Here you would navigate to the track records page
-        console.log('Navigating to track vehicle maintenance records');
-        // For now we'll just show the selection
-        alert('Selected: Track Vehicle Maintenance Records\nNotifications: ' + (notifyWhenDue ? 'Enabled' : 'Disabled'));
+        // Navigate to the vehicle maintenance tracker page
+        navigate('/admin/vehicle-maintenance');
       } else if (selectedOption === 'schedule') {
-        // Here you would navigate to the schedule maintenance page
-        console.log('Navigating to schedule upcoming maintenance tasks');
-        // For now we'll just show the selection
-        alert('Selected: Schedule Upcoming Maintenance Tasks\nNotifications: ' + (notifyWhenDue ? 'Enabled' : 'Disabled'));
+        // Navigate to the maintenance scheduler page
+        navigate('/admin/maintenance-scheduler');
+        
+        // Store notification preference in localStorage (to be used by the scheduler)
+        localStorage.setItem('notifyMaintenanceDue', notifyWhenDue.toString());
       }
     } else {
       alert('Please select an option');

@@ -28,7 +28,7 @@ const Login = () => {
     setLoading(true);
     
     try {
-      setDebugInfo('Attempting to connect to backend at http://localhost:3060/login...');
+      setDebugInfo();
       
       const response = await fetch('http://localhost:3060/login', {
         method: 'POST',
@@ -52,11 +52,19 @@ const Login = () => {
       
       // Store user data in localStorage
       localStorage.setItem('userId', data.user_id);
-      localStorage.setItem('customerId', data.customer_id);
       localStorage.setItem('userEmail', data.email);
       localStorage.setItem('userName', data.name);
       localStorage.setItem('userRole', data.role);
       localStorage.setItem('isAuthenticated', 'true');
+      
+      // Store role-specific IDs
+      if (data.customer_id) {
+        localStorage.setItem('customerId', data.customer_id);
+      }
+      
+      if (data.admin_id) {
+        localStorage.setItem('adminId', data.admin_id);
+      }
       
       // Redirect based on user role
       if (data.role === 'Admin') {
@@ -68,7 +76,6 @@ const Login = () => {
       console.error('Login error:', err);
       
       if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
-        setDebugInfo(prev => prev + '\nERROR: Could not connect to the backend server. The server may not be running.');
         setError('Failed to fetch');
       } else {
         setDebugInfo(prev => prev + `\nERROR: ${err.name}: ${err.message}`);
@@ -103,6 +110,14 @@ const Login = () => {
                   {successMessage}
                 </div>
               )}
+              
+              {/*{debugInfo && (
+                <div className="mb-4 p-3 bg-gray-50 text-gray-700 rounded-lg text-xs font-mono whitespace-pre-wrap">
+                  <strong>Debug Information:</strong>
+                  <br />
+                  {debugInfo}
+                </div>
+              )}*/}
               
               <form className="space-y-6" onSubmit={handleSubmit}>
                 <div>

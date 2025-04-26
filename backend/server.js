@@ -6,7 +6,7 @@ const port = 3060
 
 //middleware
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001'],
+  origin: ['http://localhost:3060', 'http://localhost:3001', 'http://localhost:3000'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -274,29 +274,19 @@ app.put('/rentals/:rental_id/reject', async (req, res) => {
   }
 });
 
-// User registration
+// User register
 app.post('/register', async (req, res) => {
   try {
-    console.log('Registration request received:', req.body);
-    const { email, password, role, name, phone, licenseNumber } = req.body;
+    console.log('Received registration request:', req.body);
+    const { email, password, name, phone, licenseNumber } = req.body;
 
     // Validate required fields
-    if (!email || !password || !role || !name) {
-      console.log('Missing required fields');
-      return res.status(400).json({ error: 'Required fields are missing' });
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: 'Email, password, and name are required' });
     }
 
-    // Validate role
-    if (role !== 'Customer' && role !== 'Admin') {
-      console.log('Invalid role:', role);
-      return res.status(400).json({ error: 'Invalid role. Must be Customer or Admin' });
-    }
-
-    // Additional validation for Customer role
-    if (role === 'Customer' && (!phone || !licenseNumber)) {
-      console.log('Missing customer fields');
-      return res.status(400).json({ error: 'Phone and license number are required for customers' });
-    }
+    // Always enforce Customer role for registrations
+    const role = 'Customer';
 
     // Check if user with this email already exists
     const existingUser = await pool.query(
@@ -326,22 +316,12 @@ app.post('/register', async (req, res) => {
       const userId = userResult.rows[0].user_id;
       console.log('User created with ID:', userId);
       
-      // If user is a Customer, insert customer record
-      if (role === 'Customer') {
-        console.log('Inserting customer record');
-        await client.query(
-          'INSERT INTO customer (name, email, phone, license_number, user_id) VALUES ($1, $2, $3, $4, $5)',
-          [name, email, phone, licenseNumber, userId]
-        );
-      } 
-      // If user is an Admin, insert admin record
-      else if (role === 'Admin') {
-        console.log('Inserting admin record');
-        await client.query(
-          'INSERT INTO admin (name, email, user_id) VALUES ($1, $2, $3)',
-          [name, email, userId]
-        );
-      }
+      // Insert customer record since role is always Customer
+      console.log('Inserting customer record');
+      await client.query(
+        'INSERT INTO customer (name, email, phone, license_number, user_id) VALUES ($1, $2, $3, $4, $5)',
+        [name, email, phone, licenseNumber, userId]
+      );
       
       await client.query('COMMIT');
       console.log('Transaction committed successfully');
@@ -395,6 +375,9 @@ app.post('/login', async (req, res) => {
 
     // Get customer details if user is a customer
     let customerDetails = null;
+    let adminDetails = null;
+    let name = null;
+    
     if (user.role === 'Customer') {
       const customerResult = await pool.query(
         'SELECT * FROM customer WHERE user_id = $1',
@@ -403,6 +386,17 @@ app.post('/login', async (req, res) => {
       
       if (customerResult.rows.length > 0) {
         customerDetails = customerResult.rows[0];
+        name = customerDetails.name;
+      }
+    } else if (user.role === 'Admin') {
+      const adminResult = await pool.query(
+        'SELECT * FROM admin WHERE user_id = $1',
+        [user.user_id]
+      );
+      
+      if (adminResult.rows.length > 0) {
+        adminDetails = adminResult.rows[0];
+        name = adminDetails.name;
       }
     }
 
@@ -412,7 +406,8 @@ app.post('/login', async (req, res) => {
       email: user.email,
       role: user.role,
       customer_id: customerDetails ? customerDetails.customer_id : null,
-      name: customerDetails ? customerDetails.name : null
+      admin_id: adminDetails ? adminDetails.admin_id : null,
+      name: name
     });
   } catch (error) {
     console.error('Error during login:', error);
@@ -652,5 +647,675 @@ app.get('/vehicles/:vehicle_id/reviews', async (req, res) => {
   } catch (error) {
     console.error('Error getting vehicle reviews:', error);
     res.status(500).json({ error: 'Failed to get vehicle reviews', details: error.message });
+  }
+});
+
+// Get all vehicles with maintenance status
+// app.get('/vehicles/maintenance', async (req, res) => {
+//   try {
+//     let {brand, model, type, color, transmission, minPrice, maxPrice, maintenanceStatus} = req.query;
+
+//     // Set default price range
+//     minPrice = minPrice ? parseInt(minPrice) : 0;
+//     maxPrice = maxPrice ? parseInt(maxPrice) : 99999;
+
+//     const values = [];
+//     let whereClauses = ['v.price_per_day BETWEEN $1 AND $2'];
+//     values.push(minPrice, maxPrice);
+
+//     // Dynamically add filters if provided
+//     if (brand) {
+//       values.push(brand);
+//       whereClauses.push(`v.brand = $${values.length}`);
+//     }
+//     if (model) {
+//       values.push(model);
+//       whereClauses.push(`v.model = $${values.length}`);
+//     }
+//     if (type) {
+//       values.push(type);
+//       whereClauses.push(`v.type = $${values.length}`);
+//     }
+//     if (color) {
+//       values.push(color);
+//       whereClauses.push(`v.color = $${values.length}`);
+//     }
+//     if (transmission) {
+//       values.push(transmission);
+//       whereClauses.push(`v.transmission = $${values.length}`);
+//     }
+//     if (maintenanceStatus) {
+//       values.push(maintenanceStatus);
+//       whereClauses.push(`v.maintenance_status = $${values.length}`);
+//     }
+
+//     const query = `
+//       SELECT 
+//         v.*,
+//         COALESCE(v.maintenance_status::text, 'No Records') as maintenance_status_text,
+//         COALESCE(
+//           (SELECT m.description 
+//            FROM maintenance_record m 
+//            WHERE m.vehicle_id = v.vehicle_id 
+//            ORDER BY m.maintenance_date DESC 
+//            LIMIT 1), 
+//           'No maintenance records'
+//         ) as last_maintenance_description,
+//         (SELECT COUNT(*) FROM maintenance_record m WHERE m.vehicle_id = v.vehicle_id) as maintenance_count
+//       FROM vehicle v
+//       WHERE ${whereClauses.join(' AND ')}
+//       ORDER BY v.brand, v.model
+//     `;
+    
+//     console.log('Maintenance query:', query);
+//     const vehiclesResult = await pool.query(query, values);
+    
+//     res.json(vehiclesResult.rows);
+//   } catch (error) {
+//     console.error('Error in /vehicles/maintenance:', error);
+//     res.status(500).json({ error: 'Internal Server Error', details: error.message });
+//   }
+// });
+
+app.get('/vehicles/maintenance', async (req, res) => {
+  try {
+    let { brand, model, type, color, transmission } = req.query;
+
+    const values = [];
+    let whereClauses = [];
+
+    if (brand) {
+      values.push(brand);
+      whereClauses.push(`v.brand = $${values.length}`);
+    }
+    if (model) {
+      values.push(model);
+      whereClauses.push(`v.model = $${values.length}`);
+    }
+    if (type) {
+      values.push(type);
+      whereClauses.push(`v.type = $${values.length}`);
+    }
+    if (color) {
+      values.push(color);
+      whereClauses.push(`v.color = $${values.length}`);
+    }
+    if (transmission) {
+      values.push(transmission);
+      whereClauses.push(`v.transmission = $${values.length}`);
+    }
+
+    // Build WHERE clause if any filters were applied
+    const whereClause = whereClauses.length > 0 
+      ? `WHERE ${whereClauses.join(' AND ')}` 
+      : '';
+
+    const query = `
+      SELECT 
+        v.*,
+        COALESCE(
+          (SELECT m.description 
+           FROM maintenance_record m 
+           WHERE m.vehicle_id = v.vehicle_id 
+           ORDER BY m.maintenance_date DESC 
+           LIMIT 1), 
+          'No maintenance records'
+        ) as last_maintenance_description,
+        (SELECT COUNT(*) FROM maintenance_record m WHERE m.vehicle_id = v.vehicle_id) as maintenance_count
+      FROM vehicle v
+      ${whereClause}
+      ORDER BY v.brand, v.model
+    `;
+
+    console.log('Maintenance query:', query);
+    const vehiclesResult = await pool.query(query, values);
+
+    res.json(vehiclesResult.rows);
+  } catch (error) {
+    console.error('Error in /vehicles/maintenance:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+  }
+});
+
+
+// Get maintenance history for a specific vehicle
+app.get('/vehicles/:vehicle_id/maintenance', async (req, res) => {
+  try {
+    const { vehicle_id } = req.params;
+    
+    // Get vehicle details
+    const vehicleQuery = `
+      SELECT * FROM vehicle WHERE vehicle_id = $1
+    `;
+    const vehicleResult = await pool.query(vehicleQuery, [vehicle_id]);
+    
+    if (vehicleResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Vehicle not found' });
+    }
+    
+    // Get maintenance records for the vehicle
+    const maintenanceQuery = `
+      SELECT * FROM maintenance_record 
+      WHERE vehicle_id = $1
+      ORDER BY maintenance_date DESC
+    `;
+    const maintenanceResult = await pool.query(maintenanceQuery, [vehicle_id]);
+    
+    res.json({
+      vehicle: vehicleResult.rows[0],
+      maintenance_records: maintenanceResult.rows
+    });
+  } catch (error) {
+    console.error('Error fetching vehicle maintenance:', error);
+    res.status(500).json({ error: 'Failed to fetch maintenance records', details: error.message });
+  }
+});
+
+// Add new maintenance record
+app.post('/maintenance', async (req, res) => {
+  try {
+    const { vehicle_id, description, cost, maintenance_date, status } = req.body;
+    
+    // Validate required fields
+    if (!vehicle_id || !description || !cost || !maintenance_date || !status) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+    
+    // Start a transaction
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Insert maintenance record
+      const maintenanceQuery = `
+        INSERT INTO maintenance_record (vehicle_id, description, cost, maintenance_date, status)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING *
+      `;
+      const maintenanceResult = await client.query(
+        maintenanceQuery,
+        [vehicle_id, description, cost, maintenance_date, status]
+      );
+      
+      // Update vehicle's maintenance status and last maintenance date
+      const updateVehicleQuery = `
+        UPDATE vehicle
+        SET maintenance_status = $1, last_maintenance_date = $2
+        WHERE vehicle_id = $3
+        RETURNING *
+      `;
+      await client.query(
+        updateVehicleQuery,
+        [status, maintenance_date, vehicle_id]
+      );
+      
+      await client.query('COMMIT');
+      
+      res.status(201).json(maintenanceResult.rows[0]);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error adding maintenance record:', error);
+    res.status(500).json({ error: 'Failed to add maintenance record', details: error.message });
+  }
+});
+
+// Update maintenance status
+app.put('/maintenance/:maintenance_id', async (req, res) => {
+  try {
+    const { maintenance_id } = req.params;
+    const { status, description, cost, maintenance_date } = req.body;
+    
+    // Start a transaction
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Get the vehicle_id from the maintenance record
+      const getMaintenanceQuery = `
+        SELECT vehicle_id FROM maintenance_record WHERE maintenance_id = $1
+      `;
+      const maintenanceResult = await client.query(getMaintenanceQuery, [maintenance_id]);
+      
+      if (maintenanceResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Maintenance record not found' });
+      }
+      
+      const vehicle_id = maintenanceResult.rows[0].vehicle_id;
+      
+      // Update the maintenance record
+      const updateMaintenanceQuery = `
+        UPDATE maintenance_record
+        SET status = COALESCE($1, status),
+            description = COALESCE($2, description),
+            cost = COALESCE($3, cost),
+            maintenance_date = COALESCE($4, maintenance_date)
+        WHERE maintenance_id = $5
+        RETURNING *
+      `;
+      const updateResult = await client.query(
+        updateMaintenanceQuery,
+        [status, description, cost, maintenance_date, maintenance_id]
+      );
+      
+      // If status is updated, also update vehicle maintenance status
+      if (status) {
+        const updateVehicleQuery = `
+          UPDATE vehicle
+          SET maintenance_status = $1,
+              last_maintenance_date = CASE 
+                WHEN $1 = 'Completed' THEN COALESCE($2, last_maintenance_date)
+                ELSE last_maintenance_date
+              END
+          WHERE vehicle_id = $3
+        `;
+        await client.query(
+          updateVehicleQuery,
+          [status, maintenance_date, vehicle_id]
+        );
+      }
+      
+      await client.query('COMMIT');
+      
+      res.json(updateResult.rows[0]);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error updating maintenance record:', error);
+    res.status(500).json({ error: 'Failed to update maintenance record', details: error.message });
+  }
+});
+
+// Schedule maintenance for a vehicle
+app.post('/vehicles/:vehicle_id/schedule-maintenance', async (req, res) => {
+  try {
+    const { vehicle_id } = req.params;
+    const { scheduled_date, description } = req.body;
+    
+    // Validate required fields
+    if (!scheduled_date || !description) {
+      return res.status(400).json({ error: 'Scheduled date and description are required' });
+    }
+    
+    // Start a transaction
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Create a new maintenance record with 'Scheduled' status
+      const insertMaintenanceQuery = `
+        INSERT INTO maintenance_record (vehicle_id, description, cost, maintenance_date, status)
+        VALUES ($1, $2, 0, $3, 'Scheduled')
+        RETURNING *
+      `;
+      const maintenanceResult = await client.query(
+        insertMaintenanceQuery,
+        [vehicle_id, description, scheduled_date]
+      );
+      
+      // Update vehicle's next maintenance date and status if not already in maintenance
+      const updateVehicleQuery = `
+        UPDATE vehicle
+        SET next_maintenance_date = $1,
+            maintenance_status = CASE
+              WHEN maintenance_status IS NULL OR maintenance_status = 'Completed' THEN 'Scheduled'
+              ELSE maintenance_status
+            END
+        WHERE vehicle_id = $2
+        RETURNING *
+      `;
+      const vehicleResult = await client.query(
+        updateVehicleQuery,
+        [scheduled_date, vehicle_id]
+      );
+      
+      await client.query('COMMIT');
+      
+      res.status(201).json({
+        maintenance: maintenanceResult.rows[0],
+        vehicle: vehicleResult.rows[0]
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error scheduling maintenance:', error);
+    res.status(500).json({ error: 'Failed to schedule maintenance', details: error.message });
+  }
+});
+
+// Get maintenance statistics
+app.get('/maintenance/stats', async (req, res) => {
+  try {
+    const statsQuery = `
+      SELECT
+        COUNT(*) as total_records,
+        COUNT(*) FILTER (WHERE status = 'Completed') as completed_count,
+        COUNT(*) FILTER (WHERE status = 'Ongoing') as ongoing_count,
+        COUNT(*) FILTER (WHERE status = 'Scheduled') as scheduled_count,
+        COUNT(*) FILTER (WHERE status = 'Notified to Admin') as notified_count,
+        SUM(cost) as total_cost,
+        AVG(cost) as average_cost
+      FROM maintenance_record
+    `;
+    
+    const vehicleStatsQuery = `
+      SELECT
+        COUNT(*) as total_vehicles,
+        COUNT(*) FILTER (WHERE maintenance_status = 'Completed') as vehicles_maintained,
+        COUNT(*) FILTER (WHERE maintenance_status = 'Ongoing') as vehicles_in_maintenance,
+        COUNT(*) FILTER (WHERE maintenance_status = 'Scheduled') as vehicles_scheduled,
+        COUNT(*) FILTER (WHERE maintenance_status = 'Notified to Admin') as vehicles_notified,
+        COUNT(*) FILTER (WHERE maintenance_status IS NULL) as vehicles_no_maintenance
+      FROM vehicle
+    `;
+    
+    const statsResult = await pool.query(statsQuery);
+    const vehicleStatsResult = await pool.query(vehicleStatsQuery);
+    
+    res.json({
+      maintenance_stats: statsResult.rows[0],
+      vehicle_stats: vehicleStatsResult.rows[0]
+    });
+  } catch (error) {
+    console.error('Error fetching maintenance stats:', error);
+    res.status(500).json({ error: 'Failed to fetch maintenance statistics', details: error.message });
+  }
+});
+
+// Function to update maintenance status based on dates
+const updateMaintenanceStatusBasedOnDate = (record) => {
+  if (!record || !record.maintenance_date || record.status === 'Cancelled') {
+    return record;
+  }
+  
+  const maintenanceDate = new Date(record.maintenance_date);
+  maintenanceDate.setHours(0, 0, 0, 0); // Reset time part for proper comparison
+  
+  const currentDate = new Date();
+  currentDate.setHours(0, 0, 0, 0); // Reset time part for proper comparison
+  
+  let newStatus = record.status;
+  
+  // If maintenance date is in the future -> Scheduled
+  if (maintenanceDate > currentDate) {
+    newStatus = 'Scheduled';
+  } 
+  // If maintenance date is today -> Ongoing
+  else if (maintenanceDate.getTime() === currentDate.getTime()) {
+    newStatus = 'Ongoing';
+  } 
+  // If maintenance date is in the past -> Completed
+  else if (maintenanceDate < currentDate) {
+    newStatus = 'Completed';
+  }
+  
+  // Only update if status has changed
+  if (newStatus !== record.status) {
+    record.status = newStatus;
+  }
+  
+  return record;
+};
+
+// Get maintenance records for a specific vehicle
+app.get('/vehicles/:vehicleId/maintenance', async (req, res) => {
+  try {
+    const vehicleId = req.params.vehicleId;
+    
+    // First check if vehicle exists
+    const [vehicle] = await pool.query('SELECT * FROM vehicles WHERE vehicle_id = ?', [vehicleId]);
+    
+    if (vehicle.length === 0) {
+      return res.status(404).json({ error: 'Vehicle not found' });
+    }
+    
+    // Get maintenance records
+    const [maintenanceRecords] = await pool.query(
+      'SELECT * FROM maintenance WHERE vehicle_id = ? ORDER BY maintenance_date DESC',
+      [vehicleId]
+    );
+    
+    // Update status based on dates
+    const updatedRecords = maintenanceRecords.map(record => {
+      const updatedRecord = updateMaintenanceStatusBasedOnDate(record);
+      
+      // If status changed, update in database
+      if (updatedRecord.status !== record.status) {
+        pool.query(
+          'UPDATE maintenance SET status = ? WHERE maintenance_id = ?',
+          [updatedRecord.status, updatedRecord.maintenance_id]
+        ).catch(err => console.error('Error updating status in DB:', err));
+      }
+      
+      return updatedRecord;
+    });
+    
+    res.json({
+      vehicle: vehicle[0],
+      maintenance_records: updatedRecords
+    });
+  } catch (error) {
+    console.error('Error getting maintenance records:', error);
+    res.status(500).json({ error: 'Failed to get maintenance records' });
+  }
+});
+
+// Get all maintenance records with auto-update of status based on date
+app.get('/maintenance/all', async (req, res) => {
+  try {
+    const [records] = await pool.query('SELECT * FROM maintenance ORDER BY maintenance_date DESC');
+    
+    // Update status based on dates
+    const updatedRecords = records.map(record => {
+      const updatedRecord = updateMaintenanceStatusBasedOnDate(record);
+      
+      // If status changed, update in database
+      if (updatedRecord.status !== record.status) {
+        pool.query(
+          'UPDATE maintenance SET status = ? WHERE maintenance_id = ?',
+          [updatedRecord.status, updatedRecord.maintenance_id]
+        ).catch(err => console.error('Error updating status in DB:', err));
+      }
+      
+      return updatedRecord;
+    });
+    
+    res.json(updatedRecords);
+  } catch (error) {
+    console.error('Error getting all maintenance records:', error);
+    res.status(500).json({ error: 'Failed to get maintenance records' });
+  }
+});
+
+// Update maintenance status endpoint - only allow cancellation through this endpoint
+app.put('/maintenance/:maintenanceId/status', async (req, res) => {
+  try {
+    const maintenanceId = req.params.maintenanceId;
+    const { status } = req.body;
+    
+    // Check if status is 'Cancelled' - this is the only manual update allowed
+    if (status !== 'Cancelled') {
+      return res.status(400).json({ 
+        error: 'Only cancellation is allowed through this endpoint. Other statuses are updated automatically based on date.' 
+      });
+    }
+    
+    // Update the status
+    await pool.query(
+      'UPDATE maintenance SET status = ? WHERE maintenance_id = ?',
+      [status, maintenanceId]
+    );
+    
+    res.json({ message: 'Maintenance status updated successfully', status });
+  } catch (error) {
+    console.error('Error updating maintenance status:', error);
+    res.status(500).json({ error: 'Failed to update maintenance status' });
+  }
+});
+
+// Schedule maintenance for a vehicle
+app.post('/vehicles/:vehicleId/schedule-maintenance', async (req, res) => {
+  try {
+    const vehicleId = req.params.vehicleId;
+    const { scheduled_date, description, cost } = req.body;
+    
+    // Validation
+    if (!scheduled_date || !description) {
+      return res.status(400).json({ error: 'Scheduled date and description are required' });
+    }
+    
+    // Check if vehicle exists
+    const [vehicle] = await pool.query('SELECT * FROM vehicles WHERE vehicle_id = ?', [vehicleId]);
+    
+    if (vehicle.length === 0) {
+      return res.status(404).json({ error: 'Vehicle not found' });
+    }
+    
+    // Determine status based on date
+    const maintenanceDate = new Date(scheduled_date);
+    maintenanceDate.setHours(0, 0, 0, 0);
+    
+    const currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+    
+    let status;
+    
+    if (maintenanceDate > currentDate) {
+      status = 'Scheduled';
+    } else if (maintenanceDate.getTime() === currentDate.getTime()) {
+      status = 'Ongoing';
+    } else {
+      status = 'Completed';
+    }
+    
+    // Insert maintenance record
+    const [result] = await pool.query(
+      'INSERT INTO maintenance (vehicle_id, maintenance_date, description, status, cost) VALUES (?, ?, ?, ?, ?)',
+      [vehicleId, scheduled_date, description, status, cost || 0]
+    );
+    
+    res.status(201).json({
+      message: 'Maintenance scheduled successfully',
+      maintenance_id: result.insertId,
+      status
+    });
+  } catch (error) {
+    console.error('Error scheduling maintenance:', error);
+    res.status(500).json({ error: 'Failed to schedule maintenance' });
+  }
+});
+
+// Get vehicles with maintenance info
+app.get('/vehicles/maintenance', async (req, res) => {
+  try {
+    // Extract filter parameters from query string
+    const { brand, model, type, color, transmission, maintenanceStatus } = req.query;
+    
+    let query = `
+      SELECT v.*, 
+        COALESCE(
+          (SELECT description FROM maintenance 
+           WHERE vehicle_id = v.vehicle_id 
+           ORDER BY maintenance_date DESC LIMIT 1), 
+           'No maintenance records'
+        ) AS last_maintenance_description,
+        COALESCE(
+          (SELECT status FROM maintenance 
+           WHERE vehicle_id = v.vehicle_id 
+           ORDER BY maintenance_date DESC LIMIT 1), 
+           'Good Condition'
+        ) AS maintenance_status
+      FROM vehicles v
+      WHERE 1=1
+    `;
+    
+    const params = [];
+    
+    // Add filters
+    if (brand && brand !== 'All Brands') {
+      query += ' AND v.brand = ?';
+      params.push(brand);
+    }
+    
+    if (model && model !== 'All Models') {
+      query += ' AND v.model = ?';
+      params.push(model);
+    }
+    
+    if (type && type !== 'All Types') {
+      query += ' AND v.type = ?';
+      params.push(type);
+    }
+    
+    if (color && color !== 'All Colors') {
+      query += ' AND v.color = ?';
+      params.push(color);
+    }
+    
+    if (transmission && transmission !== 'All Transmissions') {
+      query += ' AND v.transmission = ?';
+      params.push(transmission);
+    }
+    
+    // Execute query
+    const [vehicles] = await pool.query(query, params);
+    
+    // Update maintenance status based on dates
+    for (const vehicle of vehicles) {
+      if (vehicle.maintenance_status !== 'No maintenance records' && 
+          vehicle.maintenance_status !== 'Good Condition' &&
+          vehicle.maintenance_status !== 'Cancelled') {
+        
+        // Fetch latest maintenance record to update its status based on date
+        const [records] = await pool.query(
+          'SELECT * FROM maintenance WHERE vehicle_id = ? ORDER BY maintenance_date DESC LIMIT 1',
+          [vehicle.vehicle_id]
+        );
+        
+        if (records.length > 0) {
+          const updatedRecord = updateMaintenanceStatusBasedOnDate(records[0]);
+          
+          // Update vehicle's maintenance status
+          vehicle.maintenance_status = updatedRecord.status;
+          
+          // If status changed, update in database
+          if (updatedRecord.status !== records[0].status) {
+            await pool.query(
+              'UPDATE maintenance SET status = ? WHERE maintenance_id = ?',
+              [updatedRecord.status, updatedRecord.maintenance_id]
+            );
+          }
+        }
+      }
+    }
+    
+    // Apply maintenance status filter if specified
+    if (maintenanceStatus && maintenanceStatus !== 'All Statuses') {
+      const filteredVehicles = vehicles.filter(
+        vehicle => vehicle.maintenance_status === maintenanceStatus
+      );
+      return res.json(filteredVehicles);
+    }
+    
+    res.json(vehicles);
+  } catch (error) {
+    console.error('Error getting vehicles with maintenance info:', error);
+    res.status(500).json({ error: 'Failed to get vehicles' });
   }
 });

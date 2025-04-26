@@ -13,6 +13,10 @@ import VehicleReviews from "./components/VehicleReviews"
 import AdminLayout from "./components/AdminLayout"
 import AdminDashboard from "./components/AdminDashboard"
 import MaintenanceManagement from "./components/MaintenanceManagement"
+import VehicleMaintenanceTracker from "./components/VehicleMaintenanceTracker"
+import MaintenanceScheduler from "./components/MaintenanceScheduler"
+import AdminBookings from "./components/AdminBookings"
+import AdminSearch from "./components/AdminSearch"
 
 function App() {
   return (
@@ -27,7 +31,13 @@ function App() {
           {/* Admin Routes */}
           <Route element={<AdminLayout />}>
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
+            <Route path="/admin/bookings" element={<AdminBookings />} />
+            <Route path="/admin/search" element={<AdminSearch />} />
             <Route path="/admin/maintenance" element={<MaintenanceManagement />} />
+            <Route path="/admin/vehicle-maintenance" element={<VehicleMaintenanceTracker />} />
+            <Route path="/admin/vehicle-maintenance/:vehicleId" element={<VehicleMaintenanceTracker />} />
+            <Route path="/admin/add-maintenance/:vehicleId" element={<VehicleMaintenanceTracker />} />
+            <Route path="/admin/maintenance-scheduler" element={<MaintenanceScheduler />} />
           </Route>
 
           {/* Customer Routes */}

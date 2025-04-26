@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useLocation } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import CarDetailsCard from "./CarDetailsCard"
 
 const SearchPage = () => {
@@ -48,8 +48,17 @@ const SearchPage = () => {
   // Get location to check for direct booking requests
   const location = useLocation()
   const [selectedVehicleId, setSelectedVehicleId] = useState(null)
+  const navigate = useNavigate()
   
   useEffect(() => {
+    // Check if the user is an admin and redirect if needed
+    const userRole = localStorage.getItem('userRole');
+    
+    if (userRole === 'Admin' && window.location.hash === '#/search') {
+      navigate('/admin/search');
+      return;
+    }
+    
     // Check if we have a vehicle to book from the reviews page
     if (location.state?.selectedVehicleId && location.state?.bookNow) {
       const vehicleId = location.state.selectedVehicleId
@@ -58,7 +67,7 @@ const SearchPage = () => {
       // Fetch the specific vehicle and show it in results
       fetchVehicle(vehicleId)
     }
-  }, [location])
+  }, [location, navigate])
   
   // Fetch a specific vehicle by ID
   const fetchVehicle = async (vehicleId) => {

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Menu } from "react-feather" // Using react-feather instead of lucide-react
 import { Link } from "react-router-dom"
@@ -8,7 +8,29 @@ import { Link } from "react-router-dom"
 const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [userName, setUserName] = useState('');
+
+  useEffect(() => {
+    // Get user name from localStorage when component mounts
+    const name = localStorage.getItem('userName');
+    if (name) {
+      setUserName(name);
+    }
+  }, []);
+
+  const handleLogout = () => {
+    // Clear all auth-related items from localStorage
+    localStorage.removeItem('userId');
+    localStorage.removeItem('customerId');
+    localStorage.removeItem('userEmail');
+    localStorage.removeItem('userName');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('isAuthenticated');
+    
+    // Redirect to login page
+    navigate('/login');
+  };
 
   return (
     <nav className="sticky top-0 z-50 bg-[#003366] text-white w-full shadow-md">
@@ -19,7 +41,7 @@ const Navbar = () => {
               className="text-xl font-bold cursor-pointer" 
               onClick={() => navigate('/')}
             >
-              AutoZen Rental Services
+              AutoZen Rental Services - Customer
             </h1>
           </div>
 
@@ -35,9 +57,6 @@ const Navbar = () => {
                 <Link to="/search" className="px-3 py-2 hover:bg-[#004080] rounded-md">
                   Search
                 </Link>
-                <Link to="/logout" className="ml-4 px-3 py-2 bg-[#001f3f] hover:bg-[#00152a] rounded-md">
-                  Logout
-                </Link>
             </div>
           </div>
 
@@ -51,26 +70,14 @@ const Navbar = () => {
             </button>
           </div>
 
-          {/* Authentication buttons */}
-          <div className="space-x-4">
-            {/* Only show these buttons if not already on the respective pages */}
-            {location.pathname !== '/register' && (
-              <button 
-                onClick={() => navigate('/register')} 
-                className="bg-transparent hover:bg-blue-800 text-white font-semibold py-2 px-4 border border-blue-400 rounded transition duration-300"
-              >
-                Sign Up
-              </button>
-            )}
-            
-            {location.pathname !== '/login' && (
-              <button 
-                onClick={() => navigate('/login')} 
-                className="bg-blue-950 hover:bg-blue-800 text-white font-semibold py-2 px-4 rounded transition duration-300"
-              >
-                Login
-              </button>
-            )}
+          {/* User info and Logout */}
+          <div className="flex items-center space-x-4">
+            <button 
+              onClick={handleLogout} 
+              className="bg-[#001f3f] hover:bg-[#00152a] text-white font-semibold py-2 px-4 rounded transition duration-300"
+            >
+              Logout
+            </button>
           </div>
         </div>
       </div>
@@ -79,34 +86,36 @@ const Navbar = () => {
       {isMenuOpen && (
         <div className="md:hidden">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-            <a
-              href="/dashboard"
+            <Link
+              to="/"
               className="block px-3 py-2 hover:bg-[#004080] rounded-md"
               onClick={() => setIsMenuOpen(false)}
             >
               Dashboard
-            </a>
-            <a
-              href="/bookings"
+            </Link>
+            <Link
+              to="/bookings"
               className="block px-3 py-2 hover:bg-[#004080] rounded-md"
               onClick={() => setIsMenuOpen(false)}
             >
               Bookings
-            </a>
-            <a
-              href="/search"
+            </Link>
+            <Link
+              to="/search"
               className="block px-3 py-2 hover:bg-[#004080] rounded-md"
               onClick={() => setIsMenuOpen(false)}
             >
               Search
-            </a>
-            <a
-              href="/logout"
-              className="block px-3 py-2 bg-[#001f3f] hover:bg-[#00152a] rounded-md"
-              onClick={() => setIsMenuOpen(false)}
+            </Link>
+            <button
+              className="w-full text-left block px-3 py-2 bg-[#001f3f] hover:bg-[#00152a] rounded-md"
+              onClick={() => {
+                setIsMenuOpen(false);
+                handleLogout();
+              }}
             >
               Logout
-            </a>
+            </button>
           </div>
         </div>
       )}

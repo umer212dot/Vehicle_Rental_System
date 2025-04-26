@@ -27,6 +27,12 @@ const AdminNavbar = () => {
                 <Link to="/admin/dashboard" className="px-3 py-2 hover:bg-[#004080] rounded-md">
                   Dashboard
                 </Link>
+                <Link to="/admin/bookings" className="px-3 py-2 hover:bg-[#004080] rounded-md">
+                  Bookings
+                </Link>
+                <Link to="/admin/search" className="px-3 py-2 hover:bg-[#004080] rounded-md">
+                  Search
+                </Link>
                 <Link to="/admin/maintenance" className="px-3 py-2 hover:bg-[#004080] rounded-md">
                   Maintenance Management
                 </Link>
@@ -58,6 +64,20 @@ const AdminNavbar = () => {
               onClick={() => setIsMenuOpen(false)}
             >
               Dashboard
+            </Link>
+            <Link
+              to="/admin/bookings"
+              className="block px-3 py-2 hover:bg-[#004080] rounded-md"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Bookings
+            </Link>
+            <Link
+              to="/admin/search"
+              className="block px-3 py-2 hover:bg-[#004080] rounded-md"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              Search
             </Link>
             <Link
               to="/admin/maintenance"
