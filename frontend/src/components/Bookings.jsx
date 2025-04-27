@@ -39,6 +39,13 @@ function Bookings() {
         // Check if user is admin
         if (userRole === 'Admin') {
             setIsAdmin(true);
+            
+            // Check if we're on the regular bookings page and redirect to admin bookings if needed
+            if (window.location.hash === '#/bookings') {
+                navigate('/admin/bookings');
+                return;
+            }
+            
             fetchAdminBookings();
         } else {
             // Regular customer

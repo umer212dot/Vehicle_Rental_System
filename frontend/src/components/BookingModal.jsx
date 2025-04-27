@@ -7,6 +7,8 @@ const BookingModal = ({ car, isOpen, onClose, onConfirm }) => {
   const [totalFee, setTotalFee] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [maintenanceDates, setMaintenanceDates] = useState([]);
+  const [maintenanceConflict, setMaintenanceConflict] = useState(false);
 
   // Reset form when modal opens/closes or car changes
   useEffect(() => {
@@ -16,12 +18,59 @@ const BookingModal = ({ car, isOpen, onClose, onConfirm }) => {
       setTotalDays(0);
       setTotalFee(0);
       setError('');
+      setMaintenanceConflict(false);
+      
+      // Fetch maintenance dates for this vehicle
+      if (car && car.vehicle_id) {
+        fetchMaintenanceDates(car.vehicle_id);
+      }
     }
   }, [isOpen, car]);
 
+  // Fetch maintenance dates for the vehicle
+  const fetchMaintenanceDates = async (vehicleId) => {
+    try {
+      const response = await fetch(`http://localhost:3060/vehicles/${vehicleId}/maintenance-dates`);
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.maintenance_dates && data.maintenance_dates.length > 0) {
+          // Format maintenance records
+          const scheduledMaintenance = data.maintenance_dates.map(record => ({
+            date: new Date(record.maintenance_date),
+            description: record.description,
+            id: record.maintenance_id
+          }));
+          
+          setMaintenanceDates(scheduledMaintenance);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching maintenance dates:', error);
+    }
+  };
+
+  // Check for maintenance conflicts using backend API
+  const checkServerMaintenanceConflict = async (vehicleId, startDate, endDate) => {
+    try {
+      const response = await fetch(
+        `http://localhost:3060/maintenance/check-conflicts?vehicleId=${vehicleId}&startDate=${startDate}&endDate=${endDate}`
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        return data;
+      }
+      return { hasConflicts: false, conflicts: [] };
+    } catch (error) {
+      console.error('Error checking maintenance conflicts:', error);
+      return { hasConflicts: false, conflicts: [] };
+    }
+  };
+
   // Calculate total days and fee when dates change
   useEffect(() => {
-    if (startDate && endDate) {
+    if (startDate && endDate && car) {
       const start = new Date(startDate);
       const end = new Date(endDate);
       
@@ -33,10 +82,24 @@ const BookingModal = ({ car, isOpen, onClose, onConfirm }) => {
         setError('Return date must be after rental date');
         setTotalDays(0);
         setTotalFee(0);
+        setMaintenanceConflict(false);
       } else {
         setError('');
         setTotalDays(diffDays);
         setTotalFee(diffDays * car.price_per_day);
+        
+        // Check maintenance conflicts using server API
+        if (car.vehicle_id) {
+          checkServerMaintenanceConflict(car.vehicle_id, startDate, endDate)
+            .then(result => {
+              if (result.hasConflicts) {
+                setMaintenanceConflict(true);
+                setError(`Cannot book: Vehicle scheduled for maintenance during requested dates`);
+              } else {
+                setMaintenanceConflict(false);
+              }
+            });
+        }
       }
     }
   }, [startDate, endDate, car]);
@@ -52,6 +115,10 @@ const BookingModal = ({ car, isOpen, onClose, onConfirm }) => {
     if (totalDays <= 0) {
       setError('Invalid date range');
       return;
+    }
+    
+    if (maintenanceConflict) {
+      return; // Prevent submission if there's a maintenance conflict
     }
     
     setLoading(true);
@@ -139,6 +206,18 @@ const BookingModal = ({ car, isOpen, onClose, onConfirm }) => {
               </div>
             </div>
             
+            {/* Show maintenance dates if any */}
+            {maintenanceDates.length > 0 && (
+              <div className="mb-4 p-3 bg-yellow-50 rounded-lg">
+                <p className="text-sm font-medium text-yellow-800 mb-1">Vehicle Maintenance Dates:</p>
+                <ul className="text-xs text-yellow-700 list-disc pl-4">
+                  {maintenanceDates.map((maintenance, index) => (
+                    <li key={index}>{maintenance.date.toLocaleDateString()} - {maintenance.description}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
             <div className="mb-6 p-4 bg-gray-50 rounded-lg">
               <div className="flex justify-between mb-2">
                 <span className="text-gray-600">Total Days:</span>
@@ -162,7 +241,7 @@ const BookingModal = ({ car, isOpen, onClose, onConfirm }) => {
               <button
                 type="submit"
                 className="px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={loading || !!error}
+                disabled={loading || !!error || maintenanceConflict}
               >
                 {loading ? 'Processing...' : 'Confirm Booking'}
               </button>
