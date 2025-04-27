@@ -54,9 +54,9 @@ INSERT INTO public.review (rental_id, rating, comments) VALUES
 (4, 4, 'Fun to ride the Duke 390.'),
 (5, 3, 'Nice SUV but had a minor AC issue.');
 
-INSERT INTO public.maintenance_record (vehicle_id, description, cost, maintenance_date) VALUES 
-(1, 'Oil change and filter replacement', 85.00, '2024-03-01'),
-(2, 'Engine checkup and minor repairs', 200.00, '2024-03-10'),
-(3, 'Battery inspection and software update', 100.00, '2024-02-15'),
-(4, 'Brake pad replacement', 60.00, '2024-01-25'),
-(5, 'Transmission fluid change', 120.00, '2024-02-28');
+INSERT INTO public.maintenance_record (vehicle_id, description, cost, maintenance_date, status) VALUES 
+(1, 'Oil change and filter replacement', 85.00, '2024-03-01','Scheduled'),
+(2, 'Engine checkup and minor repairs', 200.00, '2024-03-10','Scheduled'),
+(3, 'Battery inspection and software update', 100.00, '2024-02-15','Scheduled'),
+(4, 'Brake pad replacement', 60.00, '2024-01-25','Scheduled'),
+(5, 'Transmission fluid change', 120.00, '2024-02-28','Scheduled');
