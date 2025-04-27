@@ -32,6 +32,24 @@ const MaintenanceStatusEditor = ({ maintenanceId, currentStatus, onStatusUpdated
     }
   };
 
+  // Check if the button should be disabled
+  const isDisabled = isUpdating || 
+                     currentStatus === 'Cancelled' || 
+                     currentStatus === 'Good Condition' ||
+                     currentStatus === 'Ongoing';
+
+  // Get tooltip message based on status
+  const getTooltipMessage = () => {
+    if (currentStatus === 'Ongoing') {
+      return "Cannot cancel ongoing maintenance";
+    } else if (currentStatus === 'Cancelled') {
+      return "Already cancelled";
+    } else if (currentStatus === 'Good Condition') {
+      return "No maintenance to cancel";
+    }
+    return "";
+  };
+
   return (
     <div className="space-y-1">
       {error && (
@@ -39,13 +57,21 @@ const MaintenanceStatusEditor = ({ maintenanceId, currentStatus, onStatusUpdated
       )}
       <div className="flex items-center space-x-2">
         {(currentStatus !== 'Cancelled' && currentStatus !== 'Good Condition') && (
-          <button
-            onClick={updateStatus}
-            disabled={isUpdating || currentStatus === 'Cancelled' || currentStatus === 'Good Condition'}
-            className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-          >
-            {isUpdating ? 'Updating...' : 'Cancel Maintenance'}
-          </button>
+          <div className="relative group">
+            <button
+              onClick={updateStatus}
+              disabled={isDisabled}
+              className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={getTooltipMessage()}
+            >
+              {isUpdating ? 'Updating...' : 'Cancel Maintenance'}
+            </button>
+            {isDisabled && currentStatus === 'Ongoing' && (
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 text-xs bg-gray-800 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+                Cannot cancel ongoing maintenance
+              </div>
+            )}
+          </div>
         )}
       </div>
       {currentStatus !== 'Cancelled' && currentStatus !== 'Good Condition' && (
@@ -61,8 +87,8 @@ const VehicleMaintenanceTracker = () => {
   const brands = ["All Brands", "Volvo", "BMW", "Audi", "Mercedes", "Toyota", "Honda"];
   const [models, setModels] = useState(["All Models"]);
   const types = ["All Types", "Sedan", "SUV", "Hatchback", "Convertible", "Hybrid"];
-  const colors = ["All Colors", "Black", "White", "Silver", "Blue", "Red", "Gray"];
-  const transmissions = ["All Transmissions", "Automatic", "Manual"];
+  //const colors = ["All Colors", "Black", "White", "Silver", "Blue", "Red", "Gray"];
+  //const transmissions = ["All Transmissions", "Automatic", "Manual"];
   const maintenanceStatuses = [
     "All Statuses", 
     "Completed", 
@@ -74,7 +100,7 @@ const VehicleMaintenanceTracker = () => {
 
   // State for loading
   const [isLoading, setIsLoading] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
+  //const [isUpdating, setIsUpdating] = useState(false);
   const [updateMessage, setUpdateMessage] = useState("");
   const [updateStatus, setUpdateStatus] = useState("");
 
@@ -454,7 +480,7 @@ const VehicleMaintenanceTracker = () => {
               </select>
             </div>
             
-            <div>
+            {/* <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Maintenance Status</label>
               <select
                 name="maintenanceStatus"
@@ -467,7 +493,7 @@ const VehicleMaintenanceTracker = () => {
                   <option key={index} value={status}>{status}</option>
                 ))}
               </select>
-            </div>
+            </div> */}
             
             <div className="md:col-span-3 mt-4">
               <button

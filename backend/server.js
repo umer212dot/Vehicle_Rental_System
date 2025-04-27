@@ -581,20 +581,20 @@ app.post('/reviews', async (req, res) => {
   }
 });
 
-// Check if customer has already reviewed a vehicle
+// Check if a rental has been reviewed
 app.get('/reviews/check', async (req, res) => {
   try {
-    const { customer_id, vehicle_id } = req.query;
+    const { rental_id } = req.query;
     
     // Validate required fields
-    if (!customer_id || !vehicle_id) {
+    if (!rental_id) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
     // Check if review exists
     const reviewCheck = await pool.query(
-      'SELECT * FROM review WHERE customer_id = $1 AND vehicle_id = $2',
-      [customer_id, vehicle_id]
+      'SELECT * FROM review WHERE rental_id = $1',
+      [rental_id]
     );
     
     res.json({ 
@@ -1196,7 +1196,9 @@ const updateMaintenanceStatusBasedOnDate = (record) => {
   const maintenanceDate = new Date(record.maintenance_date);
   maintenanceDate.setHours(0, 0, 0, 0); // Reset time part for proper comparison
   
-  const currentDate = new Date();
+  // Use actual current date for real-time status updates
+  // or use a fixed date for testing
+  const currentDate = new Date(2026, 3, 27); // 3 = April
   currentDate.setHours(0, 0, 0, 0); // Reset time part for proper comparison
   
   let newStatus = record.status;
@@ -1221,6 +1223,8 @@ const updateMaintenanceStatusBasedOnDate = (record) => {
   
   return record;
 };
+
+
 
 // Get maintenance records for a specific vehicle
 app.get('/vehicles/:vehicleId/maintenance', async (req, res) => {
@@ -1302,6 +1306,23 @@ app.put('/maintenance/:maintenanceId/status', async (req, res) => {
     if (status !== 'Cancelled') {
       return res.status(400).json({ 
         error: 'Only cancellation is allowed through this endpoint. Other statuses are updated automatically based on date.' 
+      });
+    }
+    
+    // Get the current maintenance record
+    const currentRecord = await pool.query(
+      'SELECT * FROM maintenance_record WHERE maintenance_id = $1',
+      [maintenanceId]
+    );
+    
+    if (currentRecord.rows.length === 0) {
+      return res.status(404).json({ error: 'Maintenance record not found' });
+    }
+    
+    // Check if the current status is 'Ongoing' - can't cancel ongoing maintenance
+    if (currentRecord.rows[0].status === 'Ongoing') {
+      return res.status(403).json({ 
+        error: 'Cannot cancel ongoing maintenance. Please complete the maintenance process first.' 
       });
     }
     
@@ -1559,3 +1580,38 @@ app.get('/vehicles/:vehicle_id/check-maintenance-conflicts', async (req, res) =>
     res.status(500).json({ error: 'Failed to check maintenance conflicts', details: error.message });
   }
 });
+
+// Daily maintenance status update scheduler
+const scheduleMaintenanceStatusUpdates = () => {
+  console.log('Setting up daily maintenance status update scheduler...');
+  
+  // Initial update on server start
+  updateAllMaintenanceStatuses();
+  
+  // Set interval for daily updates (24 hours = 86,400,000 milliseconds)
+  const dailyInterval = 24 * 60 * 60 * 1000;
+  
+  // Schedule regular updates
+  setInterval(() => {
+    updateAllMaintenanceStatuses();
+  }, dailyInterval);
+  
+  console.log(`Maintenance status updates scheduled to run every 24 hours`);
+};
+
+// Function to execute the update_maintenance_status SQL procedure
+const updateAllMaintenanceStatuses = async () => {
+  try {
+    console.log(`Running maintenance status update procedure at ${new Date().toISOString()}`);
+    
+    // Call the SQL procedure directly
+    await pool.query('CALL update_maintenance_status()');
+    
+    console.log('Maintenance status update procedure executed successfully');
+  } catch (error) {
+    console.error('Error executing maintenance status update procedure:', error);
+  }
+};
+
+// Start the maintenance status update scheduler when the server starts
+scheduleMaintenanceStatusUpdates();
