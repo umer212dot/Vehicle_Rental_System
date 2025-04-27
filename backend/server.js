@@ -554,3 +554,67 @@ app.get('/vehicles/:vehicle_id/reviews', async (req, res) => {
     res.status(500).json({ error: 'Failed to get vehicle reviews', details: error.message });
   }
 });
+
+// Get popular vehicles
+app.get('/analytics/popular-vehicles', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        v.vehicle_id,
+        v.brand,
+        v.model,
+        v.image_path,
+        COUNT(r.rental_id) as rental_count
+      FROM vehicle v
+      LEFT JOIN rental r ON v.vehicle_id = r.vehicle_id
+      GROUP BY v.vehicle_id, v.brand, v.model, v.image_path
+      ORDER BY rental_count DESC
+      LIMIT 5
+    `);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error getting popular vehicles:', error);
+    res.status(500).json({ error: 'Failed to get popular vehicles', details: error.message });
+  }
+});
+
+// Get vehicle type distribution
+app.get('/analytics/vehicle-types', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        type,
+        COUNT(*) as count
+      FROM vehicle
+      GROUP BY type
+      ORDER BY count DESC
+    `);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error getting vehicle type distribution:', error);
+    res.status(500).json({ error: 'Failed to get vehicle type distribution', details: error.message });
+  }
+});
+
+// Get revenue data
+app.get('/analytics/revenue', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        DATE_TRUNC('month', p.payment_date) as month,
+        SUM(p.amount) as total_revenue
+      FROM payment p
+      WHERE p.payment_status = 'Completed'
+      GROUP BY DATE_TRUNC('month', p.payment_date)
+      ORDER BY month DESC
+      LIMIT 12
+    `);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error getting revenue data:', error);
+    res.status(500).json({ error: 'Failed to get revenue data', details: error.message });
+  }
+});
