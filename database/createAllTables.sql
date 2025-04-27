@@ -173,6 +173,17 @@ TABLESPACE pg_default;
 ALTER TABLE IF EXISTS public.maintenance_record
     OWNER to postgres;
 
+-- Step 1: Create an ENUM type with the four status options
+CREATE TYPE maintenance_status AS ENUM ('Scheduled', 'In Progress', 'Completed', 'Cancelled');
+
+-- Step 2: Add the status column to the maintenance_record table
+ALTER TABLE public.maintenance_record
+ADD COLUMN IF NOT EXISTS status maintenance_status DEFAULT 'Scheduled';
+
+-- Step 3: Ensure the status column only allows values from the ENUM type (enforced by the ENUM definition)
+-- The 'DEFAULT' is set to 'Scheduled', but this ensures any value inserted adheres to the ENUM type.
+
+
 -- Table: public.admin
 -- DROP TABLE IF EXISTS public.admin;
 

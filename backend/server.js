@@ -142,6 +142,25 @@ app.post('/rentals', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    // Check for maintenance conflicts
+    const maintenanceConflictQuery = `
+      SELECT *
+      FROM maintenance_record
+      WHERE vehicle_id = $1
+        AND status = 'Scheduled'
+        AND maintenance_date BETWEEN $2 AND $3
+    `;
+    
+    const maintenanceResult = await pool.query(maintenanceConflictQuery, [vehicle_id, rental_date, return_date]);
+    const maintenanceConflicts = maintenanceResult.rows;
+    
+    if (maintenanceConflicts.length > 0) {
+      return res.status(409).json({ 
+        error: 'Vehicle is scheduled for maintenance during the requested dates',
+        conflicts: maintenanceConflicts
+      });
+    }
+
     // Insert the rental into the database with 'Awaiting Approval' status
     const newRental = await pool.query(
       'INSERT INTO rental (customer_id, vehicle_id, rental_date, return_date, total_fee, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
@@ -235,15 +254,46 @@ app.put('/rentals/:rental_id/approve', async (req, res) => {
   try {
     const { rental_id } = req.params;
     
+    // First, get the rental details
+    const rentalResult = await pool.query(
+      'SELECT * FROM rental WHERE rental_id = $1',
+      [rental_id]
+    );
+    
+    if (rentalResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Rental not found' });
+    }
+    
+    const rental = rentalResult.rows[0];
+    
+    // Check for maintenance conflicts
+    const maintenanceConflictQuery = `
+      SELECT *
+      FROM maintenance_record
+      WHERE vehicle_id = $1
+        AND status = 'Scheduled'
+        AND maintenance_date BETWEEN $2 AND $3
+    `;
+    
+    const maintenanceResult = await pool.query(
+      maintenanceConflictQuery, 
+      [rental.vehicle_id, rental.rental_date, rental.return_date]
+    );
+    
+    const maintenanceConflicts = maintenanceResult.rows;
+    
+    if (maintenanceConflicts.length > 0) {
+      return res.status(409).json({ 
+        error: 'Cannot approve rental: Vehicle is scheduled for maintenance during these dates',
+        conflicts: maintenanceConflicts
+      });
+    }
+    
     // Update rental status to 'Pending' (awaiting payment)
     const updateRental = await pool.query(
       'UPDATE rental SET status = $1 WHERE rental_id = $2 RETURNING *',
       ['Pending', rental_id]
     );
-    
-    if (updateRental.rows.length === 0) {
-      return res.status(404).json({ error: 'Rental not found' });
-    }
     
     res.json(updateRental.rows[0]);
   } catch (error) {
@@ -506,10 +556,10 @@ app.post('/payments', async (req, res) => {
 // Submit review
 app.post('/reviews', async (req, res) => {
   try {
-    const { customer_id, vehicle_id, rating, comments } = req.body;
+    const { rental_id, rating, comments } = req.body;
     
     // Validate required fields
-    if (!customer_id || !vehicle_id || !rating) {
+    if (!rental_id || !rating) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
@@ -520,8 +570,8 @@ app.post('/reviews', async (req, res) => {
     
     // Insert review
     const newReview = await pool.query(
-      'INSERT INTO review (customer_id, vehicle_id, rating, comments) VALUES ($1, $2, $3, $4) RETURNING *',
-      [customer_id, vehicle_id, rating, comments]
+      'INSERT INTO review (rental_id, rating, comments) VALUES ($1, $2, $3) RETURNING *',
+      [rental_id, rating, comments]
     );
     
     res.status(201).json(newReview.rows[0]);
@@ -559,22 +609,101 @@ app.get('/reviews/check', async (req, res) => {
 // Update rental status from 'Ongoing' to 'Completed' when return date has passed
 app.put('/rentals/update-status', async (req, res) => {
   try {
-    const currentDate = new Date().toISOString().split('T')[0]; // Get current date in YYYY-MM-DD format
-    // const currentDate = new Date(2026,4,20)
-    // Find rentals that are 'Ongoing' and have return dates before or equal to current date
-    // The database trigger will automatically update vehicle availability
-    const updateResult = await pool.query(
-      `UPDATE rental 
-       SET status = 'Completed' 
-       WHERE status = 'Ongoing' AND return_date <= $1
-       RETURNING rental_id, vehicle_id`,
-      [currentDate]
-    );
+    const { rental_id, new_status, rental_date, return_date } = req.body;
     
-    res.json({ 
-      updated: updateResult.rows.length,
-      rentals: updateResult.rows
-    });
+    // If it's a specific rental update with new dates
+    if (rental_id && (rental_date || return_date)) {
+      // Get current rental data
+      const currentRentalResult = await pool.query(
+        'SELECT * FROM rental WHERE rental_id = $1',
+        [rental_id]
+      );
+      
+      if (currentRentalResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Rental not found' });
+      }
+      
+      const currentRental = currentRentalResult.rows[0];
+      const updatedRentalDate = rental_date || currentRental.rental_date;
+      const updatedReturnDate = return_date || currentRental.return_date;
+      
+      // Check for maintenance conflicts
+      const maintenanceConflictQuery = `
+        SELECT *
+        FROM maintenance_record
+        WHERE vehicle_id = $1
+          AND status = 'Scheduled'
+          AND maintenance_date BETWEEN $2 AND $3
+      `;
+      
+      const maintenanceResult = await pool.query(
+        maintenanceConflictQuery, 
+        [currentRental.vehicle_id, updatedRentalDate, updatedReturnDate]
+      );
+      
+      const maintenanceConflicts = maintenanceResult.rows;
+      
+      if (maintenanceConflicts.length > 0) {
+        return res.status(409).json({ 
+          error: 'Cannot update rental: Vehicle is scheduled for maintenance during these dates',
+          conflicts: maintenanceConflicts
+        });
+      }
+      
+      // Update the rental with new dates and status
+      const updateFields = [];
+      const updateValues = [];
+      let valueCounter = 1;
+      
+      if (rental_date) {
+        updateFields.push(`rental_date = $${valueCounter}`);
+        updateValues.push(rental_date);
+        valueCounter++;
+      }
+      
+      if (return_date) {
+        updateFields.push(`return_date = $${valueCounter}`);
+        updateValues.push(return_date);
+        valueCounter++;
+      }
+      
+      if (new_status) {
+        updateFields.push(`status = $${valueCounter}`);
+        updateValues.push(new_status);
+        valueCounter++;
+      }
+      
+      updateValues.push(rental_id);
+      
+      const updateQuery = `
+        UPDATE rental 
+        SET ${updateFields.join(', ')} 
+        WHERE rental_id = $${valueCounter}
+        RETURNING *
+      `;
+      
+      const updateResult = await pool.query(updateQuery, updateValues);
+      
+      return res.json(updateResult.rows[0]);
+    } else {
+      // Original functionality - auto-update rentals based on date
+      const currentDate = new Date().toISOString().split('T')[0]; // Get current date in YYYY-MM-DD format
+      // const currentDate = new Date(2026,4,20)
+      // Find rentals that are 'Ongoing' and have return dates before or equal to current date
+      // The database trigger will automatically update vehicle availability
+      const updateResult = await pool.query(
+        `UPDATE rental 
+         SET status = 'Completed' 
+         WHERE status = 'Ongoing' AND return_date <= $1
+         RETURNING rental_id, vehicle_id`,
+        [currentDate]
+      );
+      
+      return res.json({ 
+        updated: updateResult.rows.length,
+        rentals: updateResult.rows
+      });
+    }
   } catch (error) {
     console.error('Error updating rental status:', error);
     res.status(500).json({ error: 'Failed to update rental status', details: error.message });
@@ -589,10 +718,11 @@ app.get('/vehicles/:vehicle_id/rating', async (req, res) => {
     // Get average rating and count of reviews
     const ratingResult = await pool.query(
       `SELECT 
-        COALESCE(AVG(rating), 0) as average_rating, 
+        COALESCE(AVG(r.rating), 0) as average_rating, 
         COUNT(*) as review_count 
-      FROM review 
-      WHERE vehicle_id = $1`,
+      FROM review r
+      JOIN rental rt ON r.rental_id = rt.rental_id
+      WHERE rt.vehicle_id = $1`,
       [vehicle_id]
     );
     
@@ -621,11 +751,12 @@ app.get('/vehicles/:vehicle_id/reviews', async (req, res) => {
         r.rating, 
         r.comments, 
         r.review_date,
-        c.customer_id,
+        rt.customer_id,
         c.name as customer_name
       FROM review r
-      JOIN customer c ON r.customer_id = c.customer_id
-      WHERE r.vehicle_id = $1
+      JOIN rental rt ON r.rental_id = rt.rental_id
+      JOIN customer c ON rt.customer_id = c.customer_id
+      WHERE rt.vehicle_id = $1
       ORDER BY r.review_date DESC`,
       [vehicle_id]
     );
@@ -650,6 +781,30 @@ app.get('/vehicles/:vehicle_id/reviews', async (req, res) => {
   }
 });
 
+// Check if a rental has been reviewed
+app.get('/reviews/check', async (req, res) => {
+  try {
+    const { rental_id } = req.query;
+    
+    // Validate required fields
+    if (!rental_id) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    // Check if review exists
+    const reviewCheck = await pool.query(
+      'SELECT * FROM review WHERE rental_id = $1',
+      [rental_id]
+    );
+    
+    res.json({ 
+      hasReviewed: reviewCheck.rows.length > 0
+    });
+  } catch (error) {
+    console.error('Error checking review status:', error);
+    res.status(500).json({ error: 'Failed to check review status', details: error.message });
+  }
+});
 // Get all vehicles with maintenance status
 // app.get('/vehicles/maintenance', async (req, res) => {
 //   try {
@@ -838,16 +993,16 @@ app.post('/maintenance', async (req, res) => {
         [vehicle_id, description, cost, maintenance_date, status]
       );
       
-      // Update vehicle's maintenance status and last maintenance date
+      // Update vehicle's last maintenance date only
       const updateVehicleQuery = `
         UPDATE vehicle
-        SET maintenance_status = $1, last_maintenance_date = $2
-        WHERE vehicle_id = $3
+        SET availability = availability
+        WHERE vehicle_id = $1
         RETURNING *
       `;
       await client.query(
         updateVehicleQuery,
-        [status, maintenance_date, vehicle_id]
+        [vehicle_id]
       );
       
       await client.query('COMMIT');
@@ -905,21 +1060,10 @@ app.put('/maintenance/:maintenance_id', async (req, res) => {
         [status, description, cost, maintenance_date, maintenance_id]
       );
       
-      // If status is updated, also update vehicle maintenance status
-      if (status) {
-        const updateVehicleQuery = `
-          UPDATE vehicle
-          SET maintenance_status = $1,
-              last_maintenance_date = CASE 
-                WHEN $1 = 'Completed' THEN COALESCE($2, last_maintenance_date)
-                ELSE last_maintenance_date
-              END
-          WHERE vehicle_id = $3
-        `;
-        await client.query(
-          updateVehicleQuery,
-          [status, maintenance_date, vehicle_id]
-        );
+      // If status is updated, no need to update vehicle as maintenance_status doesn't exist
+      if (status === 'Completed') {
+        // Instead of updating non-existent columns, just log the completion
+        console.log(`Maintenance ID ${maintenance_id} marked as completed for vehicle ${vehicle_id}`);
       }
       
       await client.query('COMMIT');
@@ -941,7 +1085,7 @@ app.put('/maintenance/:maintenance_id', async (req, res) => {
 app.post('/vehicles/:vehicle_id/schedule-maintenance', async (req, res) => {
   try {
     const { vehicle_id } = req.params;
-    const { scheduled_date, description } = req.body;
+    const { scheduled_date, description, cost } = req.body;
     
     // Validate required fields
     if (!scheduled_date || !description) {
@@ -957,35 +1101,26 @@ app.post('/vehicles/:vehicle_id/schedule-maintenance', async (req, res) => {
       // Create a new maintenance record with 'Scheduled' status
       const insertMaintenanceQuery = `
         INSERT INTO maintenance_record (vehicle_id, description, cost, maintenance_date, status)
-        VALUES ($1, $2, 0, $3, 'Scheduled')
+        VALUES ($1, $2, $3, $4, 'Scheduled')
         RETURNING *
       `;
       const maintenanceResult = await client.query(
         insertMaintenanceQuery,
-        [vehicle_id, description, scheduled_date]
+        [vehicle_id, description, cost || 0, scheduled_date]
       );
       
-      // Update vehicle's next maintenance date and status if not already in maintenance
-      const updateVehicleQuery = `
-        UPDATE vehicle
-        SET next_maintenance_date = $1,
-            maintenance_status = CASE
-              WHEN maintenance_status IS NULL OR maintenance_status = 'Completed' THEN 'Scheduled'
-              ELSE maintenance_status
-            END
-        WHERE vehicle_id = $2
-        RETURNING *
-      `;
+      // Get the vehicle data
       const vehicleResult = await client.query(
-        updateVehicleQuery,
-        [scheduled_date, vehicle_id]
+        'SELECT * FROM vehicle WHERE vehicle_id = $1',
+        [vehicle_id]
       );
       
       await client.query('COMMIT');
       
       res.status(201).json({
         maintenance: maintenanceResult.rows[0],
-        vehicle: vehicleResult.rows[0]
+        vehicle: vehicleResult.rows[0],
+        status: 'Scheduled'
       });
     } catch (error) {
       await client.query('ROLLBACK');
@@ -1017,11 +1152,25 @@ app.get('/maintenance/stats', async (req, res) => {
     const vehicleStatsQuery = `
       SELECT
         COUNT(*) as total_vehicles,
-        COUNT(*) FILTER (WHERE maintenance_status = 'Completed') as vehicles_maintained,
-        COUNT(*) FILTER (WHERE maintenance_status = 'Ongoing') as vehicles_in_maintenance,
-        COUNT(*) FILTER (WHERE maintenance_status = 'Scheduled') as vehicles_scheduled,
-        COUNT(*) FILTER (WHERE maintenance_status = 'Notified to Admin') as vehicles_notified,
-        COUNT(*) FILTER (WHERE maintenance_status IS NULL) as vehicles_no_maintenance
+        (SELECT COUNT(*) FROM vehicle v 
+         WHERE EXISTS (SELECT 1 FROM maintenance_record mr 
+                      WHERE mr.vehicle_id = v.vehicle_id 
+                      AND mr.status = 'Completed')) as vehicles_maintained,
+        (SELECT COUNT(*) FROM vehicle v 
+         WHERE EXISTS (SELECT 1 FROM maintenance_record mr 
+                      WHERE mr.vehicle_id = v.vehicle_id 
+                      AND mr.status = 'Ongoing')) as vehicles_in_maintenance,
+        (SELECT COUNT(*) FROM vehicle v 
+         WHERE EXISTS (SELECT 1 FROM maintenance_record mr 
+                      WHERE mr.vehicle_id = v.vehicle_id 
+                      AND mr.status = 'Scheduled')) as vehicles_scheduled,
+        (SELECT COUNT(*) FROM vehicle v 
+         WHERE EXISTS (SELECT 1 FROM maintenance_record mr 
+                      WHERE mr.vehicle_id = v.vehicle_id 
+                      AND mr.status = 'Notified to Admin')) as vehicles_notified,
+        (SELECT COUNT(*) FROM vehicle v 
+         WHERE NOT EXISTS (SELECT 1 FROM maintenance_record mr 
+                          WHERE mr.vehicle_id = v.vehicle_id)) as vehicles_no_maintenance
       FROM vehicle
     `;
     
@@ -1079,26 +1228,26 @@ app.get('/vehicles/:vehicleId/maintenance', async (req, res) => {
     const vehicleId = req.params.vehicleId;
     
     // First check if vehicle exists
-    const [vehicle] = await pool.query('SELECT * FROM vehicles WHERE vehicle_id = ?', [vehicleId]);
+    const vehicle = await pool.query('SELECT * FROM vehicle WHERE vehicle_id = $1', [vehicleId]);
     
-    if (vehicle.length === 0) {
+    if (vehicle.rows.length === 0) {
       return res.status(404).json({ error: 'Vehicle not found' });
     }
     
     // Get maintenance records
-    const [maintenanceRecords] = await pool.query(
-      'SELECT * FROM maintenance WHERE vehicle_id = ? ORDER BY maintenance_date DESC',
+    const maintenanceRecords = await pool.query(
+      'SELECT * FROM maintenance_record WHERE vehicle_id = $1 ORDER BY maintenance_date DESC',
       [vehicleId]
     );
     
     // Update status based on dates
-    const updatedRecords = maintenanceRecords.map(record => {
+    const updatedRecords = maintenanceRecords.rows.map(record => {
       const updatedRecord = updateMaintenanceStatusBasedOnDate(record);
       
       // If status changed, update in database
       if (updatedRecord.status !== record.status) {
         pool.query(
-          'UPDATE maintenance SET status = ? WHERE maintenance_id = ?',
+          'UPDATE maintenance_record SET status = $1 WHERE maintenance_id = $2',
           [updatedRecord.status, updatedRecord.maintenance_id]
         ).catch(err => console.error('Error updating status in DB:', err));
       }
@@ -1107,7 +1256,7 @@ app.get('/vehicles/:vehicleId/maintenance', async (req, res) => {
     });
     
     res.json({
-      vehicle: vehicle[0],
+      vehicle: vehicle.rows[0],
       maintenance_records: updatedRecords
     });
   } catch (error) {
@@ -1119,16 +1268,16 @@ app.get('/vehicles/:vehicleId/maintenance', async (req, res) => {
 // Get all maintenance records with auto-update of status based on date
 app.get('/maintenance/all', async (req, res) => {
   try {
-    const [records] = await pool.query('SELECT * FROM maintenance ORDER BY maintenance_date DESC');
+    const records = await pool.query('SELECT * FROM maintenance_record ORDER BY maintenance_date DESC');
     
     // Update status based on dates
-    const updatedRecords = records.map(record => {
+    const updatedRecords = records.rows.map(record => {
       const updatedRecord = updateMaintenanceStatusBasedOnDate(record);
       
       // If status changed, update in database
       if (updatedRecord.status !== record.status) {
         pool.query(
-          'UPDATE maintenance SET status = ? WHERE maintenance_id = ?',
+          'UPDATE maintenance_record SET status = $1 WHERE maintenance_id = $2',
           [updatedRecord.status, updatedRecord.maintenance_id]
         ).catch(err => console.error('Error updating status in DB:', err));
       }
@@ -1158,7 +1307,7 @@ app.put('/maintenance/:maintenanceId/status', async (req, res) => {
     
     // Update the status
     await pool.query(
-      'UPDATE maintenance SET status = ? WHERE maintenance_id = ?',
+      'UPDATE maintenance_record SET status = $1 WHERE maintenance_id = $2',
       [status, maintenanceId]
     );
     
@@ -1169,135 +1318,87 @@ app.put('/maintenance/:maintenanceId/status', async (req, res) => {
   }
 });
 
-// Schedule maintenance for a vehicle
-app.post('/vehicles/:vehicleId/schedule-maintenance', async (req, res) => {
-  try {
-    const vehicleId = req.params.vehicleId;
-    const { scheduled_date, description, cost } = req.body;
-    
-    // Validation
-    if (!scheduled_date || !description) {
-      return res.status(400).json({ error: 'Scheduled date and description are required' });
-    }
-    
-    // Check if vehicle exists
-    const [vehicle] = await pool.query('SELECT * FROM vehicles WHERE vehicle_id = ?', [vehicleId]);
-    
-    if (vehicle.length === 0) {
-      return res.status(404).json({ error: 'Vehicle not found' });
-    }
-    
-    // Determine status based on date
-    const maintenanceDate = new Date(scheduled_date);
-    maintenanceDate.setHours(0, 0, 0, 0);
-    
-    const currentDate = new Date();
-    currentDate.setHours(0, 0, 0, 0);
-    
-    let status;
-    
-    if (maintenanceDate > currentDate) {
-      status = 'Scheduled';
-    } else if (maintenanceDate.getTime() === currentDate.getTime()) {
-      status = 'Ongoing';
-    } else {
-      status = 'Completed';
-    }
-    
-    // Insert maintenance record
-    const [result] = await pool.query(
-      'INSERT INTO maintenance (vehicle_id, maintenance_date, description, status, cost) VALUES (?, ?, ?, ?, ?)',
-      [vehicleId, scheduled_date, description, status, cost || 0]
-    );
-    
-    res.status(201).json({
-      message: 'Maintenance scheduled successfully',
-      maintenance_id: result.insertId,
-      status
-    });
-  } catch (error) {
-    console.error('Error scheduling maintenance:', error);
-    res.status(500).json({ error: 'Failed to schedule maintenance' });
-  }
-});
-
 // Get vehicles with maintenance info
 app.get('/vehicles/maintenance', async (req, res) => {
   try {
     // Extract filter parameters from query string
     const { brand, model, type, color, transmission, maintenanceStatus } = req.query;
     
+    // Build query with proper PostgreSQL placeholders
     let query = `
       SELECT v.*, 
         COALESCE(
-          (SELECT description FROM maintenance 
+          (SELECT description FROM maintenance_record 
            WHERE vehicle_id = v.vehicle_id 
            ORDER BY maintenance_date DESC LIMIT 1), 
            'No maintenance records'
         ) AS last_maintenance_description,
         COALESCE(
-          (SELECT status FROM maintenance 
+          (SELECT status FROM maintenance_record 
            WHERE vehicle_id = v.vehicle_id 
            ORDER BY maintenance_date DESC LIMIT 1), 
            'Good Condition'
         ) AS maintenance_status
-      FROM vehicles v
+      FROM vehicle v
       WHERE 1=1
     `;
     
     const params = [];
+    let paramIndex = 1;
     
-    // Add filters
+    // Add filters with proper PostgreSQL placeholders
     if (brand && brand !== 'All Brands') {
-      query += ' AND v.brand = ?';
+      query += ` AND v.brand = $${paramIndex++}`;
       params.push(brand);
     }
     
     if (model && model !== 'All Models') {
-      query += ' AND v.model = ?';
+      query += ` AND v.model = $${paramIndex++}`;
       params.push(model);
     }
     
     if (type && type !== 'All Types') {
-      query += ' AND v.type = ?';
+      query += ` AND v.type = $${paramIndex++}`;
       params.push(type);
     }
     
     if (color && color !== 'All Colors') {
-      query += ' AND v.color = ?';
+      query += ` AND v.color = $${paramIndex++}`;
       params.push(color);
     }
     
     if (transmission && transmission !== 'All Transmissions') {
-      query += ' AND v.transmission = ?';
+      query += ` AND v.transmission = $${paramIndex++}`;
       params.push(transmission);
     }
     
-    // Execute query
-    const [vehicles] = await pool.query(query, params);
+    // Execute query with PostgreSQL style
+    const vehiclesResult = await pool.query(query, params);
+    const vehicles = vehiclesResult.rows;
     
     // Update maintenance status based on dates
     for (const vehicle of vehicles) {
+      // maintenance_status here is a virtual property derived from the query, not an actual column
       if (vehicle.maintenance_status !== 'No maintenance records' && 
           vehicle.maintenance_status !== 'Good Condition' &&
           vehicle.maintenance_status !== 'Cancelled') {
         
         // Fetch latest maintenance record to update its status based on date
-        const [records] = await pool.query(
-          'SELECT * FROM maintenance WHERE vehicle_id = ? ORDER BY maintenance_date DESC LIMIT 1',
+        const records = await pool.query(
+          'SELECT * FROM maintenance_record WHERE vehicle_id = $1 ORDER BY maintenance_date DESC LIMIT 1',
           [vehicle.vehicle_id]
         );
         
-        if (records.length > 0) {
-          const updatedRecord = updateMaintenanceStatusBasedOnDate(records[0]);
+        if (records.rows.length > 0) {
+          const updatedRecord = updateMaintenanceStatusBasedOnDate(records.rows[0]);
           
-          // Update vehicle's maintenance status
+          // Update the virtual maintenance_status in the vehicle object (just for this response)
           vehicle.maintenance_status = updatedRecord.status;
           
-          // If status changed, update in database
-          if (updatedRecord.status !== records[0].status) {
+          // If status changed, update in maintenance_record table
+          if (updatedRecord.status !== records.rows[0].status) {
             await pool.query(
-              'UPDATE maintenance SET status = ? WHERE maintenance_id = ?',
+              'UPDATE maintenance_record SET status = $1 WHERE maintenance_id = $2',
               [updatedRecord.status, updatedRecord.maintenance_id]
             );
           }
@@ -1317,5 +1418,144 @@ app.get('/vehicles/maintenance', async (req, res) => {
   } catch (error) {
     console.error('Error getting vehicles with maintenance info:', error);
     res.status(500).json({ error: 'Failed to get vehicles' });
+  }
+});
+
+// Check if a date has existing bookings for a specific vehicle
+app.get('/bookings/check-date', async (req, res) => {
+  try {
+    const { vehicleId, date } = req.query;
+    
+    if (!vehicleId || !date) {
+      return res.status(400).json({ error: 'Vehicle ID and date are required' });
+    }
+    
+    // Query to check if there are any active bookings for the specified date
+    const bookingCheckQuery = `
+      SELECT COUNT(*) as booking_count
+      FROM rental
+      WHERE vehicle_id = $1
+        AND $2 BETWEEN rental_date AND return_date
+        AND status NOT IN ('Cancelled', 'Completed')
+    `;
+    
+    const result = await pool.query(bookingCheckQuery, [vehicleId, date]);
+    const hasBooking = parseInt(result.rows[0].booking_count) > 0;
+    
+    res.json({ hasBooking });
+  } catch (error) {
+    console.error('Error checking for bookings:', error);
+    res.status(500).json({ error: 'Failed to check for bookings', details: error.message });
+  }
+});
+
+// Check for maintenance conflicts
+app.get('/maintenance/check-conflicts', async (req, res) => {
+  try {
+    const { vehicleId, startDate, endDate } = req.query;
+    
+    if (!vehicleId || !startDate || !endDate) {
+      return res.status(400).json({ error: 'Vehicle ID, start date, and end date are required' });
+    }
+    
+    // Query to check if there are any scheduled maintenances in the date range
+    const maintenanceConflictQuery = `
+      SELECT *
+      FROM maintenance_record
+      WHERE vehicle_id = $1
+        AND status = 'Scheduled'
+        AND maintenance_date BETWEEN $2 AND $3
+    `;
+    
+    const result = await pool.query(maintenanceConflictQuery, [vehicleId, startDate, endDate]);
+    const conflicts = result.rows;
+    
+    res.json({ 
+      hasConflicts: conflicts.length > 0,
+      conflicts
+    });
+  } catch (error) {
+    console.error('Error checking for maintenance conflicts:', error);
+    res.status(500).json({ error: 'Failed to check for maintenance conflicts', details: error.message });
+  }
+});
+
+// Get upcoming maintenance dates for a vehicle
+app.get('/vehicles/:vehicle_id/maintenance-dates', async (req, res) => {
+  try {
+    const { vehicle_id } = req.params;
+    
+    // Query to get scheduled maintenance dates for the vehicle
+    const query = `
+      SELECT 
+        maintenance_id,
+        maintenance_date,
+        description,
+        status
+      FROM maintenance_record
+      WHERE vehicle_id = $1
+        AND status = 'Scheduled'
+        AND maintenance_date >= CURRENT_DATE
+      ORDER BY maintenance_date ASC
+    `;
+    
+    const result = await pool.query(query, [vehicle_id]);
+    
+    res.json({
+      vehicle_id,
+      maintenance_dates: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching vehicle maintenance dates:', error);
+    res.status(500).json({ error: 'Failed to fetch maintenance dates', details: error.message });
+  }
+});
+
+// Check for maintenance conflicts for a specific vehicle and date range
+app.get('/vehicles/:vehicle_id/check-maintenance-conflicts', async (req, res) => {
+  try {
+    const { vehicle_id } = req.params;
+    const { start_date, end_date } = req.query;
+    
+    if (!start_date || !end_date) {
+      return res.status(400).json({ error: 'Start date and end date are required' });
+    }
+    
+    // Format dates for query
+    const formattedStartDate = new Date(start_date).toISOString().split('T')[0];
+    const formattedEndDate = new Date(end_date).toISOString().split('T')[0];
+    
+    // Query maintenance records that overlap with the requested date range
+    const query = `
+      SELECT * FROM maintenance_record 
+      WHERE vehicle_id = $1 
+      AND status = 'Scheduled'
+      AND maintenance_date >= $2 
+      AND maintenance_date <= $3
+    `;
+    
+    const result = await pool.query(query, [vehicle_id, formattedStartDate, formattedEndDate]);
+    
+    if (result.rows.length > 0) {
+      // Format the conflicts for client-side display
+      const conflicts = result.rows.map(maintenance => ({
+        date: maintenance.maintenance_date,
+        description: maintenance.description,
+        id: maintenance.maintenance_id
+      }));
+      
+      return res.json({
+        hasConflicts: true,
+        conflicts
+      });
+    } else {
+      return res.json({
+        hasConflicts: false,
+        conflicts: []
+      });
+    }
+  } catch (error) {
+    console.error('Error checking maintenance conflicts:', error);
+    res.status(500).json({ error: 'Failed to check maintenance conflicts', details: error.message });
   }
 });

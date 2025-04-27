@@ -30,18 +30,17 @@ const BookingModal = ({ car, isOpen, onClose, onConfirm }) => {
   // Fetch maintenance dates for the vehicle
   const fetchMaintenanceDates = async (vehicleId) => {
     try {
-      const response = await fetch(`http://localhost:3060/vehicles/${vehicleId}/maintenance`);
+      const response = await fetch(`http://localhost:3060/vehicles/${vehicleId}/maintenance-dates`);
       if (response.ok) {
         const data = await response.json();
         
-        if (data.maintenance_records && data.maintenance_records.length > 0) {
-          // Extract dates of scheduled maintenance
-          const scheduledMaintenance = data.maintenance_records
-            .filter(record => record.status === 'Scheduled')
-            .map(record => ({
-              date: new Date(record.maintenance_date),
-              description: record.description
-            }));
+        if (data.maintenance_dates && data.maintenance_dates.length > 0) {
+          // Format maintenance records
+          const scheduledMaintenance = data.maintenance_dates.map(record => ({
+            date: new Date(record.maintenance_date),
+            description: record.description,
+            id: record.maintenance_id
+          }));
           
           setMaintenanceDates(scheduledMaintenance);
         }
@@ -51,32 +50,27 @@ const BookingModal = ({ car, isOpen, onClose, onConfirm }) => {
     }
   };
 
-  // Check if a date conflicts with scheduled maintenance
-  const checkMaintenanceConflict = (start, end) => {
-    if (!start || !end || maintenanceDates.length === 0) return false;
-    
-    const startDate = new Date(start);
-    const endDate = new Date(end);
-    
-    // Check if any maintenance date falls within the booking period
-    for (const maintenance of maintenanceDates) {
-      const maintenanceDate = maintenance.date;
+  // Check for maintenance conflicts using backend API
+  const checkServerMaintenanceConflict = async (vehicleId, startDate, endDate) => {
+    try {
+      const response = await fetch(
+        `http://localhost:3060/maintenance/check-conflicts?vehicleId=${vehicleId}&startDate=${startDate}&endDate=${endDate}`
+      );
       
-      if (maintenanceDate >= startDate && maintenanceDate <= endDate) {
-        return {
-          conflict: true,
-          date: maintenanceDate.toLocaleDateString(),
-          description: maintenance.description
-        };
+      if (response.ok) {
+        const data = await response.json();
+        return data;
       }
+      return { hasConflicts: false, conflicts: [] };
+    } catch (error) {
+      console.error('Error checking maintenance conflicts:', error);
+      return { hasConflicts: false, conflicts: [] };
     }
-    
-    return { conflict: false };
   };
 
   // Calculate total days and fee when dates change
   useEffect(() => {
-    if (startDate && endDate) {
+    if (startDate && endDate && car) {
       const start = new Date(startDate);
       const end = new Date(endDate);
       
@@ -90,23 +84,25 @@ const BookingModal = ({ car, isOpen, onClose, onConfirm }) => {
         setTotalFee(0);
         setMaintenanceConflict(false);
       } else {
-        // Check for maintenance conflicts
-        const conflict = checkMaintenanceConflict(startDate, endDate);
+        setError('');
+        setTotalDays(diffDays);
+        setTotalFee(diffDays * car.price_per_day);
         
-        if (conflict.conflict) {
-          setMaintenanceConflict(true);
-          setError(`Cannot book: Vehicle scheduled for maintenance on ${conflict.date} (${conflict.description})`);
-          setTotalDays(diffDays);
-          setTotalFee(diffDays * car.price_per_day);
-        } else {
-          setMaintenanceConflict(false);
-          setError('');
-          setTotalDays(diffDays);
-          setTotalFee(diffDays * car.price_per_day);
+        // Check maintenance conflicts using server API
+        if (car.vehicle_id) {
+          checkServerMaintenanceConflict(car.vehicle_id, startDate, endDate)
+            .then(result => {
+              if (result.hasConflicts) {
+                setMaintenanceConflict(true);
+                setError(`Cannot book: Vehicle scheduled for maintenance during requested dates`);
+              } else {
+                setMaintenanceConflict(false);
+              }
+            });
         }
       }
     }
-  }, [startDate, endDate, car, maintenanceDates]);
+  }, [startDate, endDate, car]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

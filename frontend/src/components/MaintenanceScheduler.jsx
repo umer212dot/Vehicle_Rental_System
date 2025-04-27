@@ -404,6 +404,16 @@ const MaintenanceScheduler = () => {
   // Schedule maintenance
   const handleScheduleMaintenance = async (maintenanceData) => {
     try {
+      // Log the API URL and request body for debugging
+      console.log('Scheduling maintenance with:', {
+        url: `http://localhost:3060/vehicles/${maintenanceData.vehicle_id}/schedule-maintenance`,
+        body: {
+          scheduled_date: maintenanceData.maintenance_date,
+          description: maintenanceData.description,
+          cost: maintenanceData.cost
+        }
+      });
+      
       // Make API request to schedule maintenance
       const response = await fetch(`http://localhost:3060/vehicles/${maintenanceData.vehicle_id}/schedule-maintenance`, {
         method: 'POST',
@@ -417,13 +427,26 @@ const MaintenanceScheduler = () => {
         })
       });
       
+      // Parse the response JSON regardless of status
+      let responseData;
+      try {
+        responseData = await response.json();
+      } catch (jsonError) {
+        console.error('Error parsing response JSON:', jsonError);
+        throw new Error('Failed to parse server response');
+      }
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to schedule maintenance');
+        console.error('Server response error:', {
+          status: response.status,
+          statusText: response.statusText,
+          data: responseData
+        });
+        throw new Error(responseData.error || responseData.details || 'Failed to schedule maintenance');
       }
       
       // Success! Show success message and refresh vehicles
-      setSuccessMessage(`Maintenance scheduled successfully for ${selectedVehicle.brand} ${selectedVehicle.model}`);
+      setSuccessMessage(`Maintenance scheduled successfully for ${selectedVehicle.brand} ${selectedVehicle.model}. Status: ${responseData.status || 'Scheduled'}`);
       setTimeout(() => setSuccessMessage(''), 5000);
       
       // Refresh vehicles to show updated data
@@ -517,8 +540,21 @@ const MaintenanceScheduler = () => {
         }
       }
       
+      // Get the vehicle_id whether selectedVehicle is an object or an ID
+      const vehicleId = typeof selectedVehicle === 'object' ? selectedVehicle.vehicle_id : selectedVehicle;
+      
+      // Log the API URL and request body for debugging
+      console.log('Scheduling maintenance with:', {
+        url: `http://localhost:3060/vehicles/${vehicleId}/schedule-maintenance`,
+        body: {
+          scheduled_date: formattedDate,
+          description: maintenanceType + ': ' + description,
+          cost: 0
+        }
+      });
+      
       // Schedule maintenance
-      const response = await fetch(`http://localhost:3060/vehicles/${selectedVehicle}/schedule-maintenance`, {
+      const response = await fetch(`http://localhost:3060/vehicles/${vehicleId}/schedule-maintenance`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -530,10 +566,12 @@ const MaintenanceScheduler = () => {
         }),
       });
 
+      // Parse the response JSON regardless of status
+      const responseData = await response.json();
+
       if (response.ok) {
-        const result = await response.json();
         setMessage({
-          text: `Maintenance scheduled successfully. Status set to: ${result.status}`,
+          text: `Maintenance scheduled successfully. Status set to: ${responseData.status || 'Scheduled'}`,
           type: 'success'
         });
         
@@ -544,12 +582,16 @@ const MaintenanceScheduler = () => {
         
         // Refresh maintenance list
         if (selectedVehicle) {
-          fetchExistingMaintenances(selectedVehicle.vehicle_id);
+          fetchExistingMaintenances(vehicleId);
         }
       } else {
-        const error = await response.json();
+        console.error('Server response error:', {
+          status: response.status,
+          statusText: response.statusText,
+          data: responseData
+        });
         setMessage({
-          text: error.error || "Failed to schedule maintenance",
+          text: responseData.error || responseData.details || "Failed to schedule maintenance",
           type: 'error'
         });
       }
