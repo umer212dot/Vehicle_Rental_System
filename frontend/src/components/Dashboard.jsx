@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FaCar, FaClock, FaCheck, FaHourglassHalf } from 'react-icons/fa';
@@ -44,8 +43,7 @@ function Dashboard() {
             const endpoint = (userRole==="Admin") ? '/rentals/all' : `/rentals/customer/${customerId}`;
             
             const response = await fetch(`http://localhost:3060${endpoint}`);
-            const data = await response.json();
-            //console.log("is admin :"+ isAdmin);
+            const data = await response.json();       
             // Ensure data is an array before setting it to rentals
             const rentalData = Array.isArray(data) ? data : [];
             setRentals(rentalData);
@@ -78,6 +76,14 @@ function Dashboard() {
                 const revenueResponse = await fetch('http://localhost:3060/analytics/revenue');
                 const revenueData = await revenueResponse.json();
                 setRevenue(Array.isArray(revenueData) ? revenueData : []);
+            } else {
+                // For customers with no current rentals, fetch popular available vehicles as suggestions
+                const ongoingRentals = rentalData.filter(rental => rental.status === 'Ongoing');
+                if (ongoingRentals.length === 0) {
+                    const suggestionsResponse = await fetch('http://localhost:3060/analytics/available-popular-vehicles');
+                    const suggestionsData = await suggestionsResponse.json();
+                    setPopularVehicles(Array.isArray(suggestionsData) ? suggestionsData : []);
+                }
             }
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
@@ -270,35 +276,71 @@ function Dashboard() {
                 </div>
             )}
 
-            {/* Currently Rented Vehicles */}
+            {/* Currently Rented Vehicles or Suggestions */}
             <div>
-                <h2 className="text-xl font-bold mb-4">Currently Rented Vehicles</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {Array.isArray(rentals) && rentals
-                        .filter(rental => rental.status === 'Ongoing')
-                        .map(rental => (
-                            <div key={rental.rental_id} className="bg-white rounded-lg shadow-md overflow-hidden">
-                                <img 
-                                    src={rental.vehicle.image_path} 
-                                    alt={`${rental.vehicle.brand} ${rental.vehicle.model}`}
-                                    className="w-full h-48 object-cover"
-                                />
-                                <div className="p-4">
-                                    <h3 className="font-bold text-lg mb-2">
-                                        {rental.vehicle.brand} {rental.vehicle.model}
-                                    </h3>
-                                    <p className="text-gray-600">
-                                        Return Date: {new Date(rental.return_date).toLocaleDateString()}
-                                    </p>
-                                    {isAdmin && rental.customer && (
-                                        <p className="text-gray-600 mt-2">
-                                            Rented by: {rental.customer.name}
+                {Array.isArray(rentals) && rentals.filter(rental => rental.status === 'Ongoing').length > 0 ? (
+                    <>
+                        <h2 className="text-xl font-bold mb-4">Currently Rented Vehicles</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {rentals
+                                .filter(rental => rental.status === 'Ongoing')
+                                .map(rental => (
+                                    <div key={rental.rental_id} className="bg-white rounded-lg shadow-md overflow-hidden">
+                                        <img 
+                                            src={rental.vehicle.image_path} 
+                                            alt={`${rental.vehicle.brand} ${rental.vehicle.model}`}
+                                            className="w-full h-48 object-cover"
+                                        />
+                                        <div className="p-4">
+                                            <h3 className="font-bold text-lg mb-2">
+                                                {rental.vehicle.brand} {rental.vehicle.model}
+                                            </h3>
+                                            <p className="text-gray-600">
+                                                Return Date: {new Date(rental.return_date).toLocaleDateString()}
+                                            </p>
+                                            {isAdmin && rental.customer && (
+                                                <p className="text-gray-600 mt-2">
+                                                    Rented by: {rental.customer.name}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                        </div>
+                    </>
+                ) : !isAdmin && (
+                    <>
+                        <h2 className="text-xl font-bold mb-4">Popular Vehicles Available Now</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {popularVehicles.map(vehicle => (
+                                <div key={vehicle.vehicle_id} className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col">
+                                    <img 
+                                        src={vehicle.image_path} 
+                                        alt={`${vehicle.brand} ${vehicle.model}`}
+                                        className="w-full h-48 object-cover"
+                                    />
+                                    <div className="p-4 flex-1 flex flex-col">
+                                        <h3 className="font-bold text-lg mb-2 truncate" title={`${vehicle.brand} ${vehicle.model}`}>
+                                            {vehicle.brand} {vehicle.model}
+                                        </h3>
+                                        <p className="text-gray-600">
+                                            Daily Rate: ${vehicle.price_per_day}
                                         </p>
-                                    )}
+                                        <p className="text-sm text-gray-500 mt-2 mb-3">
+                                            {vehicle.rental_count} previous rentals
+                                        </p>
+                                        <button 
+                                            onClick={() => navigate(`/search?vehicleId=${vehicle.vehicle_id}`)}
+                                            className="mt-auto w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors"
+                                        >
+                                            Rent Now
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
-                </div>
+                            ))}
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );
