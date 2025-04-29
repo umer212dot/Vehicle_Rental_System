@@ -1832,7 +1832,7 @@ app.delete('/vehicles/:vehicle_id', async (req, res) => {
     const scheduledMaintenance = await pool.query(
       `SELECT * FROM maintenance_record 
        WHERE vehicle_id = $1 
-       AND status IN ('Scheduled', 'Ongoing')`,
+       AND status IN ('Scheduled', 'In Progress')`,
       [vehicle_id]
     );
 
@@ -1860,6 +1860,38 @@ app.delete('/vehicles/:vehicle_id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting vehicle:', error);
     res.status(500).json({ error: 'Failed to delete vehicle', details: error.message });
+  }
+});
+
+// Create a new vehicle - Add adminAuthMiddleware
+app.post('/vehicles', adminAuthMiddleware, async (req, res) => {
+  try {
+    const { brand, model, type, color, transmission, year, price_per_day, image_path } = req.body;
+
+    // Validate required fields
+    if (!brand || !model || !type || !color || !transmission || !year || !price_per_day) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    // Insert new vehicle
+    const query = `
+      INSERT INTO vehicle (
+        brand, model, type, color, transmission, year, 
+        price_per_day, image_path, availability
+      ) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+      RETURNING *
+    `;
+
+    const result = await pool.query(query, [
+      brand, model, type, color, transmission, year,
+      price_per_day, image_path
+    ]);
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating vehicle:', error);
+    res.status(500).json({ error: 'Failed to create vehicle', details: error.message });
   }
 });
 

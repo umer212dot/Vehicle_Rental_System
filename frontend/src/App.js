@@ -18,6 +18,7 @@ import AdminBookings from "./components/AdminBookings"
 import AdminSearch from "./components/AdminSearch"
 import AdminVehicles from './components/AdminVehicles'
 import UpdateVehicle from './components/UpdateVehicle'
+import AddVehicle from './components/AddVehicle'
 
 function App() {
   return (
@@ -40,6 +41,7 @@ function App() {
             <Route path="/admin/add-maintenance/:vehicleId" element={<VehicleMaintenanceTracker />} />
             <Route path="/admin/maintenance-scheduler" element={<MaintenanceScheduler />} />
             <Route path="/admin/vehicles" element={<AdminVehicles />} />
+            <Route path="/admin/add-vehicle" element={<AddVehicle />} />
             <Route path="/admin/edit-vehicle/:vehicleId" element={<UpdateVehicle />} />
           </Route>
 
