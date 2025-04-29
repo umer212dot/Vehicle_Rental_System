@@ -11,7 +11,6 @@ import Register from "./components/Register"
 import Payment from "./components/Payment"
 import VehicleReviews from "./components/VehicleReviews"
 import AdminLayout from "./components/AdminLayout"
-import AdminDashboard from "./components/AdminDashboard"
 import MaintenanceManagement from "./components/MaintenanceManagement"
 import VehicleMaintenanceTracker from "./components/VehicleMaintenanceTracker"
 import MaintenanceScheduler from "./components/MaintenanceScheduler"
@@ -30,7 +29,7 @@ function App() {
 
           {/* Admin Routes */}
           <Route element={<AdminLayout />}>
-            <Route path="/admin/dashboard" element={<AdminDashboard />} />
+            <Route path="/admin/dashboard" element={<Dashboard />} />
             <Route path="/admin/bookings" element={<AdminBookings />} />
             <Route path="/admin/search" element={<AdminSearch />} />
             <Route path="/admin/maintenance" element={<MaintenanceManagement />} />
