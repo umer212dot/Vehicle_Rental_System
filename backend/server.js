@@ -20,6 +20,22 @@ app.use((req, res, next) => {
   next();
 });
 
+// Admin authentication middleware
+const adminAuthMiddleware = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'No authentication token provided' });
+  }
+
+  const role = authHeader.split(' ')[1];
+  if (role !== 'Admin') {
+    return res.status(401).json({ error: 'Unauthorized. Admin access required.' });
+  }
+
+  next();
+};
+
 //insert
 app.post('/test', async (req, res) => {
   const { text } = req.body
@@ -1719,147 +1735,131 @@ app.get('/analytics/available-popular-vehicles', async (req, res) => {
   }
 });
 
-// Get vehicle details
-app.get('/vehicles/:vehicle_id/details', async (req, res) => {
+// Get a single vehicle by ID
+app.get('/vehicles/:vehicle_id', async (req, res) => {
   try {
     const { vehicle_id } = req.params;
-    const result = await pool.query('SELECT * FROM vehicle WHERE vehicle_id = $1', [vehicle_id]);
+    const vehicleResult = await pool.query(
+      'SELECT * FROM vehicle WHERE vehicle_id = $1',
+      [vehicle_id]
+    );
     
-    if (result.rows.length === 0) {
+    if (vehicleResult.rows.length === 0) {
       return res.status(404).json({ error: 'Vehicle not found' });
     }
     
+    res.json(vehicleResult.rows[0]);
+  } catch (error) {
+    console.error('Error fetching vehicle:', error);
+    res.status(500).json({ error: 'Failed to fetch vehicle', details: error.message });
+  }
+});
+
+// Update a vehicle - Add adminAuthMiddleware
+app.put('/vehicles/:vehicle_id', adminAuthMiddleware, async (req, res) => {
+  try {
+    const { vehicle_id } = req.params;
+    const { color, price_per_day, image_path } = req.body; // Only allow these fields to be updated
+
+    // Check if vehicle exists
+    const vehicleCheck = await pool.query(
+      'SELECT * FROM vehicle WHERE vehicle_id = $1',
+      [vehicle_id]
+    );
+
+    if (vehicleCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Vehicle not found' });
+    }
+
+    // Check if vehicle has active bookings
+    const activeBookingsQuery = `
+      SELECT COUNT(*) 
+      FROM rental 
+      WHERE vehicle_id = $1 
+      AND status IN ('Ongoing', 'Awaiting Approval', 'Pending')
+    `;
+    const activeBookings = await pool.query(activeBookingsQuery, [vehicle_id]);
+
+    if (parseInt(activeBookings.rows[0].count) > 0) {
+      return res.status(400).json({ error: 'Cannot update vehicle with active bookings' });
+    }
+
+    // If all checks pass, proceed with update (only allowed fields)
+    const updateQuery = `
+      UPDATE vehicle 
+      SET color = COALESCE($1, color), 
+          price_per_day = COALESCE($2, price_per_day), 
+          image_path = COALESCE($3, image_path)
+      WHERE vehicle_id = $4
+      RETURNING *
+    `;
+
+    const result = await pool.query(updateQuery, [
+      color, 
+      price_per_day, 
+      image_path, 
+      vehicle_id
+    ]);
+
     res.json(result.rows[0]);
   } catch (error) {
-    console.error('Error getting vehicle details:', error);
-    res.status(500).json({ error: 'Failed to get vehicle details', details: error.message });
-  }
-});
-
-// Update vehicle details
-app.put('/vehicles/:vehicle_id', async (req, res) => {
-  try {
-    const { vehicle_id } = req.params;
-    const { brand, model, type, year, color, transmission, price_per_day, image_path, availability } = req.body;
-
-    // Start a transaction
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      // Check if vehicle exists
-      const vehicleExists = await client.query(
-        'SELECT vehicle_id FROM vehicle WHERE vehicle_id = $1',
-        [vehicle_id]
-      );
-
-      if (vehicleExists.rows.length === 0) {
-        throw new Error('Vehicle not found');
-      }
-
-      // Check if vehicle can be made unavailable (no active rentals)
-      if (availability === false) {
-        const activeRentals = await client.query(
-          'SELECT rental_id FROM rental WHERE vehicle_id = $1 AND status IN ($2, $3)',
-          [vehicle_id, 'Ongoing', 'Pending']
-        );
-
-        if (activeRentals.rows.length > 0) {
-          throw new Error('Cannot make vehicle unavailable - there are active rentals');
-        }
-      }
-
-      // Update vehicle
-      const updateQuery = `
-        UPDATE vehicle 
-        SET brand = $1, model = $2, type = $3, year = $4, 
-            color = $5, transmission = $6, price_per_day = $7, 
-            image_path = $8, availability = $9
-        WHERE vehicle_id = $10
-        RETURNING *
-      `;
-
-      const result = await client.query(updateQuery, [
-        brand, model, type, year, color, transmission,
-        price_per_day, image_path, availability, vehicle_id
-      ]);
-
-      await client.query('COMMIT');
-      res.json(result.rows[0]);
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  } catch (error) {
     console.error('Error updating vehicle:', error);
-    res.status(500).json({ error: error.message || 'Failed to update vehicle' });
+    res.status(500).json({ error: 'Failed to update vehicle', details: error.message });
   }
 });
 
-// Delete vehicle
-app.delete('/vehicles/:vehicle_id/delete', async (req, res) => {
+// Delete a vehicle
+app.delete('/vehicles/:vehicle_id', async (req, res) => {
   try {
     const { vehicle_id } = req.params;
-    const { adminPassword } = req.body;
 
-    // Start a transaction
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    // Check if vehicle has any active rentals
+    const activeRentals = await pool.query(
+      `SELECT * FROM rental 
+       WHERE vehicle_id = $1 
+       AND status IN ('Awaiting Approval', 'Pending', 'Ongoing')`,
+      [vehicle_id]
+    );
 
-      // First verify admin password
-      const adminCheck = await client.query(
-        'SELECT admin_id FROM admin WHERE password = $1',
-        [adminPassword]
-      );
-
-      if (adminCheck.rows.length === 0) {
-        throw new Error('Invalid admin password');
-      }
-
-      // Check if vehicle has any active rentals
-      const activeRentals = await client.query(
-        'SELECT rental_id FROM rental WHERE vehicle_id = $1 AND status IN ($2, $3)',
-        [vehicle_id, 'Ongoing', 'Pending']
-      );
-
-      if (activeRentals.rows.length > 0) {
-        throw new Error('Cannot delete vehicle - there are active rentals');
-      }
-
-      // Check if vehicle has any scheduled maintenance
-      const scheduledMaintenance = await client.query(
-        'SELECT maintenance_id FROM maintenance_record WHERE vehicle_id = $1 AND status = $2',
-        [vehicle_id, 'Scheduled']
-      );
-
-      if (scheduledMaintenance.rows.length > 0) {
-        throw new Error('Cannot delete vehicle - there is scheduled maintenance');
-      }
-
-      // Delete the vehicle
-      const result = await client.query(
-        'DELETE FROM vehicle WHERE vehicle_id = $1 RETURNING *',
-        [vehicle_id]
-      );
-
-      if (result.rows.length === 0) {
-        throw new Error('Vehicle not found');
-      }
-
-      await client.query('COMMIT');
-      res.json({ message: 'Vehicle deleted successfully' });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
+    if (activeRentals.rows.length > 0) {
+      return res.status(400).json({ 
+        error: 'Cannot delete vehicle with active rentals',
+        activeRentals: activeRentals.rows
+      });
     }
+
+    // Check if vehicle has any scheduled maintenance
+    const scheduledMaintenance = await pool.query(
+      `SELECT * FROM maintenance_record 
+       WHERE vehicle_id = $1 
+       AND status IN ('Scheduled', 'Ongoing')`,
+      [vehicle_id]
+    );
+
+    if (scheduledMaintenance.rows.length > 0) {
+      return res.status(400).json({ 
+        error: 'Cannot delete vehicle with scheduled or ongoing maintenance',
+        scheduledMaintenance: scheduledMaintenance.rows
+      });
+    }
+
+    // Delete the vehicle if no active rentals or maintenance
+    const deleteVehicle = await pool.query(
+      'DELETE FROM vehicle WHERE vehicle_id = $1 RETURNING *',
+      [vehicle_id]
+    );
+
+    if (deleteVehicle.rows.length === 0) {
+      return res.status(404).json({ error: 'Vehicle not found' });
+    }
+
+    res.json({ 
+      message: 'Vehicle deleted successfully',
+      deletedVehicle: deleteVehicle.rows[0]
+    });
   } catch (error) {
     console.error('Error deleting vehicle:', error);
-    res.status(500).json({ error: error.message || 'Failed to delete vehicle' });
+    res.status(500).json({ error: 'Failed to delete vehicle', details: error.message });
   }
 });
 
