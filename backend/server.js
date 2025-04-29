@@ -1719,3 +1719,147 @@ app.get('/analytics/available-popular-vehicles', async (req, res) => {
   }
 });
 
+// Get vehicle details
+app.get('/vehicles/:vehicle_id/details', async (req, res) => {
+  try {
+    const { vehicle_id } = req.params;
+    const result = await pool.query('SELECT * FROM vehicle WHERE vehicle_id = $1', [vehicle_id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Vehicle not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error getting vehicle details:', error);
+    res.status(500).json({ error: 'Failed to get vehicle details', details: error.message });
+  }
+});
+
+// Update vehicle details
+app.put('/vehicles/:vehicle_id', async (req, res) => {
+  try {
+    const { vehicle_id } = req.params;
+    const { brand, model, type, year, color, transmission, price_per_day, image_path, availability } = req.body;
+
+    // Start a transaction
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Check if vehicle exists
+      const vehicleExists = await client.query(
+        'SELECT vehicle_id FROM vehicle WHERE vehicle_id = $1',
+        [vehicle_id]
+      );
+
+      if (vehicleExists.rows.length === 0) {
+        throw new Error('Vehicle not found');
+      }
+
+      // Check if vehicle can be made unavailable (no active rentals)
+      if (availability === false) {
+        const activeRentals = await client.query(
+          'SELECT rental_id FROM rental WHERE vehicle_id = $1 AND status IN ($2, $3)',
+          [vehicle_id, 'Ongoing', 'Pending']
+        );
+
+        if (activeRentals.rows.length > 0) {
+          throw new Error('Cannot make vehicle unavailable - there are active rentals');
+        }
+      }
+
+      // Update vehicle
+      const updateQuery = `
+        UPDATE vehicle 
+        SET brand = $1, model = $2, type = $3, year = $4, 
+            color = $5, transmission = $6, price_per_day = $7, 
+            image_path = $8, availability = $9
+        WHERE vehicle_id = $10
+        RETURNING *
+      `;
+
+      const result = await client.query(updateQuery, [
+        brand, model, type, year, color, transmission,
+        price_per_day, image_path, availability, vehicle_id
+      ]);
+
+      await client.query('COMMIT');
+      res.json(result.rows[0]);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error updating vehicle:', error);
+    res.status(500).json({ error: error.message || 'Failed to update vehicle' });
+  }
+});
+
+// Delete vehicle
+app.delete('/vehicles/:vehicle_id/delete', async (req, res) => {
+  try {
+    const { vehicle_id } = req.params;
+    const { adminPassword } = req.body;
+
+    // Start a transaction
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // First verify admin password
+      const adminCheck = await client.query(
+        'SELECT admin_id FROM admin WHERE password = $1',
+        [adminPassword]
+      );
+
+      if (adminCheck.rows.length === 0) {
+        throw new Error('Invalid admin password');
+      }
+
+      // Check if vehicle has any active rentals
+      const activeRentals = await client.query(
+        'SELECT rental_id FROM rental WHERE vehicle_id = $1 AND status IN ($2, $3)',
+        [vehicle_id, 'Ongoing', 'Pending']
+      );
+
+      if (activeRentals.rows.length > 0) {
+        throw new Error('Cannot delete vehicle - there are active rentals');
+      }
+
+      // Check if vehicle has any scheduled maintenance
+      const scheduledMaintenance = await client.query(
+        'SELECT maintenance_id FROM maintenance_record WHERE vehicle_id = $1 AND status = $2',
+        [vehicle_id, 'Scheduled']
+      );
+
+      if (scheduledMaintenance.rows.length > 0) {
+        throw new Error('Cannot delete vehicle - there is scheduled maintenance');
+      }
+
+      // Delete the vehicle
+      const result = await client.query(
+        'DELETE FROM vehicle WHERE vehicle_id = $1 RETURNING *',
+        [vehicle_id]
+      );
+
+      if (result.rows.length === 0) {
+        throw new Error('Vehicle not found');
+      }
+
+      await client.query('COMMIT');
+      res.json({ message: 'Vehicle deleted successfully' });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error deleting vehicle:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete vehicle' });
+  }
+});
+

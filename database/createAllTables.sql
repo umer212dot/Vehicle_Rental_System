@@ -206,3 +206,33 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public.admin
     OWNER to postgres;
+
+-- Create enum type for activity
+CREATE TYPE activity_type AS ENUM ('added', 'deleted', 'updated');
+
+-- Table: public.admin_logs
+-- DROP TABLE IF EXISTS public.admin_logs;
+
+CREATE TABLE IF NOT EXISTS public.admin_logs
+(
+    log_id serial NOT NULL,
+    admin_id integer NOT NULL,
+    vehicle_id integer NOT NULL,
+    timestamp timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    activity activity_type NOT NULL,
+    description text COLLATE pg_catalog."default" NOT NULL,
+    CONSTRAINT admin_logs_pkey PRIMARY KEY (log_id),
+    CONSTRAINT admin_logs_admin_id_fkey FOREIGN KEY (admin_id)
+        REFERENCES public.admin (admin_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE,
+    CONSTRAINT admin_logs_vehicle_id_fkey FOREIGN KEY (vehicle_id)
+        REFERENCES public.vehicle (vehicle_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public.admin_logs
+    OWNER to postgres;
