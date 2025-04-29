@@ -1681,3 +1681,41 @@ const updateAllMaintenanceStatuses = async () => {
 // Start the maintenance status update scheduler when the server starts
 scheduleMaintenanceStatusUpdates();
 
+// Get available popular vehicles (for customer suggestions)
+app.get('/analytics/available-popular-vehicles', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        v.vehicle_id,
+        v.brand,
+        v.model,
+        v.image_path,
+        v.price_per_day,
+        COUNT(r2.rental_id) as rental_count
+      FROM vehicle v
+      LEFT JOIN rental r2 ON v.vehicle_id = r2.vehicle_id AND r2.status != 'Cancelled'
+      WHERE v.availability = true
+      AND NOT EXISTS (
+        SELECT 1 
+        FROM rental r
+        WHERE r.vehicle_id = v.vehicle_id 
+        AND r.status = 'Ongoing'
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM maintenance_record mr
+        WHERE mr.vehicle_id = v.vehicle_id 
+        AND mr.status IN ('In Progress', 'Scheduled')
+      )
+      GROUP BY v.vehicle_id, v.brand, v.model, v.image_path, v.price_per_day
+      ORDER BY COUNT(r2.rental_id) DESC
+      LIMIT 5
+    `);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error getting available popular vehicles:', error);
+    res.status(500).json({ error: 'Failed to get available popular vehicles', details: error.message });
+  }
+});
+
