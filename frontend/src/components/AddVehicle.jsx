@@ -15,7 +15,8 @@ const AddVehicle = () => {
         transmission: '',
         year: new Date().getFullYear(),
         price_per_day: '',
-        image_path: ''
+        image_path: '',
+        vehicle_no_plate: ''
     });
 
     // Predefined options for dropdowns
@@ -241,7 +242,17 @@ const AddVehicle = () => {
                             className="w-full p-2 border rounded"
                         />
                     </div>
-
+                    <div>
+                        <label className="block text-gray-700 mb-2">Vehicle Number Plate</label>
+                        <input
+                            type="text"
+                            name="vehicle_no_plate"
+                            value={formData.vehicle_no_plate}
+                            onChange={handleChange}
+                            className="w-full p-2 border rounded"
+                            required
+                        />
+                    </div>
                     <div className="md:col-span-2">
                         <label className="block text-gray-700 mb-2">Image Path:</label>
                         <input
