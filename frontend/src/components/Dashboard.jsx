@@ -168,7 +168,7 @@ function Dashboard() {
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold">Dashboard</h1>
                 {isAdmin && (
-                    <Link to="/manage-vehicles" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                    <Link to="/admin/vehicles" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
                         Manage Vehicles
                     </Link>
                 )}

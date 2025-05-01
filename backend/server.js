@@ -1813,8 +1813,8 @@ app.get('/vehicles/:vehicle_id', async (req, res) => {
 app.put('/vehicles/:vehicle_id', adminAuthMiddleware, async (req, res) => {
   try {
     const { vehicle_id } = req.params;
-    const { color, price_per_day, image_path } = req.body; // Only allow these fields to be updated
-
+    const { color, price_per_day, image_path, admin_id } = req.body; // Only allow these fields to be updated
+    console.log('Admin ID:', admin_id);
     // Check if vehicle exists
     const vehicleCheck = await pool.query(
       'SELECT * FROM vehicle WHERE vehicle_id = $1',
@@ -1855,6 +1855,19 @@ app.put('/vehicles/:vehicle_id', adminAuthMiddleware, async (req, res) => {
       vehicle_id
     ]);
 
+    // Log the update of a vehicle
+    const logQuery = `
+      INSERT INTO admin_logs (admin_id, vehicle_id, activity, description)
+      VALUES ($1, $2, $3, $4)
+    `;
+    const logValues = [
+      admin_id,
+      vehicle_id,
+      'updated',
+      `Updated car: ID ${vehicle_id}`
+    ];
+    await pool.query(logQuery, logValues);
+
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating vehicle:', error);
@@ -1865,7 +1878,9 @@ app.put('/vehicles/:vehicle_id', adminAuthMiddleware, async (req, res) => {
 // Delete a vehicle
 app.delete('/vehicles/:vehicle_id', async (req, res) => {
   try {
-    const { vehicle_id } = req.params;
+    const { vehicle_id} = req.params;
+    const { admin_id } = req.body;
+    console.log('Admin ID:', admin_id);
 
     // Check if vehicle has any active rentals
     const activeRentals = await pool.query(
@@ -1907,6 +1922,19 @@ app.delete('/vehicles/:vehicle_id', async (req, res) => {
       return res.status(404).json({ error: 'Vehicle not found' });
     }
 
+    // Log the deletion of a vehicle
+    const logQuery = `
+      INSERT INTO admin_logs (admin_id, vehicle_id, activity, description)
+      VALUES ($1, $2, $3, $4)
+    `;
+    const logValues = [
+      admin_id,
+      vehicle_id,
+      'deleted',
+      `Deleted car: ID ${vehicle_id} `
+    ];
+    await pool.query(logQuery, logValues);
+
     res.json({ 
       message: 'Vehicle deleted successfully',
       deletedVehicle: deleteVehicle.rows[0]
@@ -1920,8 +1948,7 @@ app.delete('/vehicles/:vehicle_id', async (req, res) => {
 // Create a new vehicle - Add adminAuthMiddleware
 app.post('/vehicles', adminAuthMiddleware, async (req, res) => {
   try {
-    const { brand, model, type, color, transmission, year, price_per_day, image_path } = req.body;
-
+    const { brand, model, type, color, transmission, year, price_per_day,vehicle_no_plate, image_path, admin_id} = req.body;
     // Validate required fields
     if (!brand || !model || !type || !color || !transmission || !year || !price_per_day) {
       return res.status(400).json({ error: 'All fields are required' });
@@ -1931,16 +1958,29 @@ app.post('/vehicles', adminAuthMiddleware, async (req, res) => {
     const query = `
       INSERT INTO vehicle (
         brand, model, type, color, transmission, year, 
-        price_per_day, image_path, availability
+        price_per_day, image_path, availability,vehicle_no_plate
       ) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9)
       RETURNING *
     `;
 
     const result = await pool.query(query, [
       brand, model, type, color, transmission, year,
-      price_per_day, image_path
+      price_per_day, image_path,vehicle_no_plate
     ]);
+
+    // Log the addition of a new vehicle
+    const logQuery = `
+      INSERT INTO admin_logs (admin_id, vehicle_id, activity, description)
+      VALUES ($1, $2, $3, $4)
+    `;
+    const logValues = [
+      admin_id, // Assuming admin_id is available in the request
+      result.rows[0].vehicle_id,
+      'added',
+      `Added car: ${brand} ${model}, No Plate: ${vehicle_no_plate}`
+    ];
+    await pool.query(logQuery, logValues);
 
     res.status(201).json(result.rows[0]);
   } catch (error) {

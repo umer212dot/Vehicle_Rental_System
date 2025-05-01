@@ -55,7 +55,8 @@ const AddVehicle = () => {
                 ...formData,
                 brand: finalBrand,
                 color: finalColor,
-                type: finalType
+                type: finalType,
+                admin_id: localStorage.getItem('adminId') // Include admin_id in the submitted data
             };
 
             // Remove extra fields that shouldn't be sent to the server
@@ -71,7 +72,7 @@ const AddVehicle = () => {
                 },
                 body: JSON.stringify(submitData)
             });
-
+            console.log("submitData", submitData);
             if (!response.ok) {
                 const data = await response.json();
                 throw new Error(data.error || 'Failed to add vehicle');

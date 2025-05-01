@@ -65,13 +65,17 @@ const UpdateVehicle = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const submitData = {
+        ...formData,
+        admin_id: localStorage.getItem('adminId') // Include admin_id in the submitted data
+      };
       const response = await fetch(`http://localhost:3060/vehicles/${vehicleId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('userRole')}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(submitData)
       });
 
       if (!response.ok) {
@@ -91,12 +95,14 @@ const UpdateVehicle = () => {
     }
 
     try {
+      const id = localStorage.getItem('adminId');
       const response = await fetch(`http://localhost:3060/vehicles/${vehicleId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('userRole')}`
-        }
+        },
+        body: JSON.stringify({ admin_id: id })
       });
 
       if (!response.ok) {
