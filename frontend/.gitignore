@@ -12,7 +12,7 @@
 /build
 
 # misc
-backend/database.js
+Vehicle_Rental_System\backend\database.js
 .DS_Store
 .env.local
 .env.development.local
