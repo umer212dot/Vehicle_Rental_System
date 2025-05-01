@@ -811,7 +811,7 @@ app.get('/analytics/popular-vehicles', async (req, res) => {
         v.image_path,
         COUNT(r.rental_id) as rental_count
       FROM vehicle v
-      LEFT JOIN rental r ON v.vehicle_id = r.vehicle_id
+      LEFT JOIN rental r ON v.vehicle_id = r.vehicle_id and r.status != 'Cancelled'
       GROUP BY v.vehicle_id, v.brand, v.model, v.image_path
       ORDER BY rental_count DESC
       LIMIT 5
@@ -1174,6 +1174,34 @@ app.post('/vehicles/:vehicle_id/schedule-maintenance', async (req, res) => {
     if (!scheduled_date || !description) {
       return res.status(400).json({ error: 'Scheduled date and description are required' });
     }
+
+    // Check if the scheduled date is today or in the past
+    const scheduledDate = new Date(scheduled_date);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+
+    if (scheduledDate < tomorrow) {
+      return res.status(400).json({ 
+        error: 'Maintenance can only be scheduled for dates after today' 
+      });
+    }
+
+    // Check for booking conflicts
+    const bookingConflictQuery = `
+      SELECT * FROM rental 
+      WHERE vehicle_id = $1 
+      AND status NOT IN ('Cancelled', 'Completed')
+      AND $2 BETWEEN rental_date AND return_date
+    `;
+    
+    const bookingResult = await pool.query(bookingConflictQuery, [vehicle_id, scheduled_date]);
+    
+    if (bookingResult.rows.length > 0) {
+      return res.status(409).json({ 
+        error: 'Cannot schedule maintenance during an active rental period' 
+      });
+    }
     
     // Start a transaction
     const client = await pool.connect();
@@ -1214,6 +1242,25 @@ app.post('/vehicles/:vehicle_id/schedule-maintenance', async (req, res) => {
   } catch (error) {
     console.error('Error scheduling maintenance:', error);
     res.status(500).json({ error: 'Failed to schedule maintenance', details: error.message });
+  }
+});
+
+app.get('/rentals/vehicle/:vehicle_id', async (req, res) => {
+  try {
+    const { vehicle_id } = req.params;
+    
+    const query = `
+      SELECT * FROM rental 
+      WHERE vehicle_id = $1 
+      AND status NOT IN ('Cancelled', 'Completed')
+      ORDER BY rental_date ASC
+    `;
+    
+    const result = await pool.query(query, [vehicle_id]);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching vehicle bookings:', error);
+    res.status(500).json({ error: 'Failed to fetch vehicle bookings' });
   }
 });
 
@@ -1406,6 +1453,11 @@ app.put('/maintenance/:maintenanceId/status', async (req, res) => {
     if (currentRecord.rows[0].status === 'Ongoing') {
       return res.status(403).json({ 
         error: 'Cannot cancel ongoing maintenance. Please complete the maintenance process first.' 
+      });
+    }
+    if (currentRecord.rows[0].status === 'Completed') {
+      return res.status(403).json({ 
+        error: 'Cannot cancel completed maintenance.' 
       });
     }
     

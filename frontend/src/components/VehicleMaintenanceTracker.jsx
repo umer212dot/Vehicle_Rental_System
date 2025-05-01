@@ -36,7 +36,8 @@ const MaintenanceStatusEditor = ({ maintenanceId, currentStatus, onStatusUpdated
   const isDisabled = isUpdating || 
                      currentStatus === 'Cancelled' || 
                      currentStatus === 'Good Condition' ||
-                     currentStatus === 'Ongoing';
+                     currentStatus === 'Ongoing' ||
+                     currentStatus === 'Completed';
 
   // Get tooltip message based on status
   const getTooltipMessage = () => {
@@ -46,6 +47,8 @@ const MaintenanceStatusEditor = ({ maintenanceId, currentStatus, onStatusUpdated
       return "Already cancelled";
     } else if (currentStatus === 'Good Condition') {
       return "No maintenance to cancel";
+    } else if (currentStatus === 'Completed') {
+      return "Cannot cancel completed maintenance";
     }
     return "";
   };

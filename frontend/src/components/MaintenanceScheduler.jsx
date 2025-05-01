@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { FaTools, FaCalendarAlt, FaMoneyBillWave, FaInfoCircle, FaCalendarPlus } from 'react-icons/fa';
 
 // Maintenance Scheduling Modal component
-const MaintenanceScheduleModal = ({ vehicle, isOpen, onClose, onSchedule }) => {
+const MaintenanceScheduleModal = ({ vehicle, isOpen, onClose, onSchedule, existingBookings, hasBookingConflict }) => {
   const [formData, setFormData] = useState({
     description: '',
-    maintenance_date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD
+    maintenance_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Tomorrow's date
     cost: '0'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -17,7 +17,7 @@ const MaintenanceScheduleModal = ({ vehicle, isOpen, onClose, onSchedule }) => {
     if (isOpen) {
       setFormData({
         description: '',
-        maintenance_date: new Date().toISOString().split('T')[0],
+        maintenance_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Tomorrow's date
         cost: '0'
       });
       setError('');
@@ -55,6 +55,23 @@ const MaintenanceScheduleModal = ({ vehicle, isOpen, onClose, onSchedule }) => {
     
     if (!formData.maintenance_date) {
       setError('Maintenance date is required');
+      return;
+    }
+
+    // Check if the selected date is today or in the past
+    const selectedDate = new Date(formData.maintenance_date);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+
+    if (selectedDate < tomorrow) {
+      setError('Maintenance can only be scheduled for dates after today');
+      return;
+    }
+
+    // Check for booking conflicts
+    if (hasBookingConflict(formData.maintenance_date)) {
+      setError('Cannot schedule maintenance during an active rental period');
       return;
     }
     
@@ -129,10 +146,11 @@ const MaintenanceScheduleModal = ({ vehicle, isOpen, onClose, onSchedule }) => {
                   name="maintenance_date"
                   value={formData.maintenance_date}
                   onChange={handleInputChange}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                   className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   required
                 />
+                <p className="mt-1 text-xs text-gray-500">Maintenance can only be scheduled for dates after today and outside of rental periods</p>
               </div>
               
               <div>
@@ -225,6 +243,7 @@ const MaintenanceScheduler = () => {
   // State for loading
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [existingBookings, setExistingBookings] = useState([]);
 
   // State for form inputs
   const [formData, setFormData] = useState({
@@ -384,9 +403,33 @@ const MaintenanceScheduler = () => {
     }
   };
 
+  // Fetch existing bookings for a vehicle
+  const fetchExistingBookings = async (vehicleId) => {
+    try {
+      const response = await fetch(`http://localhost:3060/rentals/vehicle/${vehicleId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setExistingBookings(data);
+      }
+    } catch (error) {
+      console.error('Error fetching bookings:', error);
+    }
+  };
+
+  // Check if a date falls within any booking period
+  const hasBookingConflict = (date) => {
+    const selectedDate = new Date(date);
+    return existingBookings.some(booking => {
+      const rentalDate = new Date(booking.rental_date);
+      const returnDate = new Date(booking.return_date);
+      return selectedDate >= rentalDate && selectedDate <= returnDate;
+    });
+  };
+
   // Handle schedule maintenance button click
   const handleScheduleClick = (vehicle) => {
     setSelectedVehicle(vehicle);
+    fetchExistingBookings(vehicle.vehicle_id);
     setIsModalOpen(true);
   };
 
@@ -660,6 +703,8 @@ const MaintenanceScheduler = () => {
           isOpen={isModalOpen}
           onClose={handleModalClose}
           onSchedule={handleScheduleMaintenance}
+          existingBookings={existingBookings}
+          hasBookingConflict={hasBookingConflict}
         />
       )}
     </div>
