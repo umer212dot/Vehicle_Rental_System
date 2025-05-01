@@ -27,11 +27,11 @@ INSERT INTO public.customer (name, email, phone, license_number, user_id) VALUES
 ('Tom Hardy', 'tom@example.com', '555-555-5555', 'LIC005', NULL);
 
 INSERT INTO public.vehicle ( model, type, price_per_day, availability, brand, image_path, transmission, color, year ) VALUES 
-('Toyota Camry', 'Sedan', 50.00, true, 'Toyota', '/images/vehicles/camry.jpg', 'Automatic', 'White', 2021),
-('Ford Ranger', 'Truck', 75.00, true, 'Ford', '/images/vehicles/ranger.jpg', 'Manual', 'Blue', 2020),
-('Tesla Model 3', 'Sedan', 120.00, true, 'Tesla', '/images/vehicles/model3.jpg', 'Automatic', 'Black', 2023),
-('KTM Duke 390', 'Bike', 40.00, true, 'KTM', '/images/vehicles/duke.jpg', 'Manual', 'Orange', 2022),
-('Hyundai Tucson', 'SUV', 90.00, true, 'Hyundai', '/images/vehicles/tucson.jpg', 'Automatic', 'Silver', 2021);
+('Camry', 'Sedan', 50.00, true, 'Toyota', '/images/vehicles/camry.jpg', 'Automatic', 'White', 2021),
+('Ranger', 'Truck', 75.00, true, 'Ford', '/images/vehicles/ranger.jpg', 'Manual', 'Blue', 2020),
+('Model 3', 'Sedan', 120.00, true, 'Tesla', '/images/vehicles/model3.jpg', 'Automatic', 'Black', 2023),
+('Duke 390', 'Bike', 40.00, true, 'KTM', '/images/vehicles/duke.jpg', 'Manual', 'Orange', 2022),
+('Tucson', 'SUV', 90.00, true, 'Hyundai', '/images/vehicles/tucson.jpg', 'Automatic', 'Silver', 2021);
 
 INSERT INTO public.rental (customer_id, vehicle_id, rental_date, return_date, status) VALUES 
 (1, 1, '2024-04-01', '2024-04-04', 'Completed'),
