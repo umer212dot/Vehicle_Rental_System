@@ -376,7 +376,7 @@ app.post('/register', async (req, res) => {
       // Insert user record
       console.log('Inserting user record');
       const userResult = await client.query(
-        'INSERT INTO users (email, password_hash, role, created_at) VALUES ($1, $2, $3, CURRENT_TIMESTAMP) RETURNING *',
+        'INSERT INTO users (email, password_hash, role, created_at) VALUES ($1, crypt($2,gen_salt(\'bf\')), $3, CURRENT_TIMESTAMP) RETURNING *',
         [email, password, role]
       );
       
@@ -423,8 +423,8 @@ app.post('/login', async (req, res) => {
 
     // Check if user exists
     const userResult = await pool.query(
-      'SELECT * FROM users WHERE email = $1',
-      [email]
+      'SELECT *, password_hash = crypt($2,password_hash) as is_valid FROM users WHERE email = $1',
+      [email,password]
     );
 
     if (userResult.rows.length === 0) {
@@ -436,7 +436,7 @@ app.post('/login', async (req, res) => {
     // In a real application, you would verify the password hash here
     // For simplicity, we're just checking if the password matches directly
     // This is NOT secure for a production environment
-    if (user.password_hash !== password) {
+    if (!user.is_valid) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
