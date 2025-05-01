@@ -232,6 +232,7 @@ app.get('/rentals/all', async (req, res) => {
         color: row.color,
         year: row.year,
         price_per_day: row.price_per_day,
+        vehicle_no_plate: row.vehicle_no_plate,
         image_path: row.image_path,
         transmission: row.transmission,
         availability: row.availability
@@ -513,6 +514,7 @@ app.get('/rentals/customer/:customer_id', async (req, res) => {
         color: row.color,
         year: row.year,
         price_per_day: row.price_per_day,
+        vehicle_no_plate: row.vehicle_no_plate,
         image_path: row.image_path,
         transmission: row.transmission,
         availability: row.availability

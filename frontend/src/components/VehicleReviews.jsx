@@ -206,7 +206,7 @@ function VehicleReviews() {
                                 {vehicle.brand} {vehicle.model}
                             </h1>
                             <p className="text-gray-600 mb-4">
-                                {vehicle.type} • {vehicle.color} • {vehicle.year} • {vehicle.transmission}
+                                {vehicle.type} • {vehicle.color} • {vehicle.year} • {vehicle.transmission} • {vehicle.vehicle_no_plate}
                             </p>
                             <div className="flex items-center mb-4">
                                 <div className="flex mr-2">

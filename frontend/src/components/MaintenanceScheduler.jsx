@@ -624,7 +624,7 @@ const MaintenanceScheduler = () => {
                   {/* Vehicle Info */}
                   <div className="p-4">
                     <h3 className="text-lg font-medium text-gray-900">{vehicle.brand} {vehicle.model}</h3>
-                    <p className="text-sm text-gray-500">{vehicle.type} • {vehicle.year} • {vehicle.color}</p>
+                    <p className="text-sm text-gray-500">{vehicle.type} • {vehicle.year} • {vehicle.vehicle_no_plate} • {vehicle.color}</p>
                     
                     <div className="mt-4 flex justify-between items-center">
                       <div>

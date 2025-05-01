@@ -283,6 +283,7 @@ const AdminVehicles = () => {
                                 <p>Color: {vehicle.color}</p>
                                 <p>Year: {vehicle.year}</p>
                                 <p>Price per day: ${vehicle.price_per_day}</p>
+                                <p>Number Plate: {vehicle.vehicle_no_plate}</p>
                                 <p className={`font-semibold ${vehicle.availability ? 'text-green-600' : 'text-red-600'}`}>
                                     {vehicle.availability ? 'Available' : 'Not Available'}
                                 </p>

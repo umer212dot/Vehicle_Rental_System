@@ -585,7 +585,7 @@ function Bookings() {
                                                         <h2 className="text-xl font-bold text-gray-800">
                                                             {booking.vehicle.brand} {booking.vehicle.model}
                                                         </h2>
-                                                        <p className="text-gray-600">{booking.vehicle.type} • {booking.vehicle.color} • {booking.vehicle.year}</p>
+                                                        <p className="text-gray-600">{booking.vehicle.type} • {booking.vehicle.color} • {booking.vehicle.year} • {booking.vehicle.vehicle_no_plate}</p>
                                                         
                                                         {/* Rating Display */}
                                                         <div className="flex items-center mt-1">

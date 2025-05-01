@@ -226,6 +226,7 @@ const VehicleMaintenanceTracker = () => {
                   type: vehicleData.type,
                   color: vehicleData.color,
                   year: vehicleData.year,
+                  vehicle_no_plate: vehicleData.vehicle_no_plate,
                   price_per_day: vehicleData.price_per_day,
                   image_path: vehicleData.image_path,
                   transmission: vehicleData.transmission
@@ -262,6 +263,7 @@ const VehicleMaintenanceTracker = () => {
               type: result.vehicle?.type || vehicle.type,
               color: result.vehicle?.color || vehicle.color,
               year: result.vehicle?.year || vehicle.year,
+              vehicle_no_plate: result.vehicle?.vehicle_no_plate || vehicle.vehicle_no_plate,
               price_per_day: result.vehicle?.price_per_day || vehicle.price_per_day,
               image_path: result.vehicle?.image_path || vehicle.image_path,
               transmission: result.vehicle?.transmission || vehicle.transmission
@@ -577,6 +579,8 @@ const VehicleMaintenanceTracker = () => {
                             </div>
                             <div className="text-sm text-gray-500">
                               {record.type} ({record.year})
+                              <br />
+                              {record.vehicle_no_plate}
                             </div>
                           </div>
                         </div>
@@ -621,4 +625,4 @@ const VehicleMaintenanceTracker = () => {
   );
 };
 
-export default VehicleMaintenanceTracker; 
+export default VehicleMaintenanceTracker;

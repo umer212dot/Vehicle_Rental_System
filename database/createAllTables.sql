@@ -56,6 +56,7 @@ ALTER TABLE IF EXISTS public.customer
 CREATE TABLE IF NOT EXISTS public.vehicle
 (
     vehicle_id serial NOT NULL,
+    vehicle_no_plate character varying(20) COLLATE pg_catalog."default" NOT NULL UNIQUE,
     model character varying(100) COLLATE pg_catalog."default" NOT NULL,
     type character varying(50) COLLATE pg_catalog."default" NOT NULL,
     price_per_day numeric(10,2) NOT NULL,
@@ -72,6 +73,7 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public.vehicle
     OWNER to postgres;
+
 	
 -- Table: public.rental
 -- DROP TABLE IF EXISTS public.rental;

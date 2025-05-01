@@ -7,7 +7,8 @@ const UpdateVehicle = () => {
   const [formData, setFormData] = useState({
     color: '',
     price_per_day: '',
-    image_path: ''
+    image_path: '',
+    vehicle_no_plate: ''
   });
   const [vehicleDetails, setVehicleDetails] = useState(null);
   const [error, setError] = useState('');
@@ -43,7 +44,8 @@ const UpdateVehicle = () => {
       setFormData({
         color: data.color,
         price_per_day: data.price_per_day,
-        image_path: data.image_path
+        image_path: data.image_path,
+        vehicle_no_plate: data.vehicle_no_plate
       });
       setLoading(false);
     } catch (err) {
@@ -154,6 +156,10 @@ const UpdateVehicle = () => {
                   <p className="text-gray-600">Status:</p>
                   <p className="font-medium">{vehicleDetails.availability ? 'Available' : 'Unavailable'}</p>
                 </div>
+                <div>
+                  <p className="text-gray-600">Plate No:</p>
+                  <p className="font-medium">{vehicleDetails.vehicle_no_plate}</p>
+                </div>
               </div>
             </div>
             <div className="flex justify-center items-center">
@@ -198,6 +204,16 @@ const UpdateVehicle = () => {
               type="text"
               name="image_path"
               value={formData.image_path}
+              onChange={handleChange}
+              className="w-full p-2 border rounded"
+            />
+          </div>
+          <div>
+            <label className="block text-gray-700 mb-2">Number Plate:</label>
+            <input
+              type="text"
+              name="vehicle_no_plate"
+              value={formData.vehicle_no_plate}
               onChange={handleChange}
               className="w-full p-2 border rounded"
             />
