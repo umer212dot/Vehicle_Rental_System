@@ -130,6 +130,11 @@ function VehicleReviews() {
         }
     };
     
+    const getBackUrl = () => {
+        const userRole = localStorage.getItem('userRole');
+        return userRole === 'Admin' ? '/admin/vehicles' : '/search';
+    };
+
     if (loading) {
         return (
             <div className="flex justify-center items-center min-h-screen">
@@ -145,12 +150,12 @@ function VehicleReviews() {
                     <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
                         <p className="text-red-700">{error}</p>
                     </div>
-                    <button 
-                        onClick={fetchVehicleReviews}
+                    <Link 
+                        to={getBackUrl()}
                         className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                     >
-                        Try Again
-                    </button>
+                        Back to {isAdmin ? 'Vehicles' : 'Search'}
+                    </Link>
                 </div>
             </div>
         );
@@ -164,10 +169,10 @@ function VehicleReviews() {
                         <p className="text-yellow-700">Vehicle not found</p>
                     </div>
                     <Link 
-                        to="/search"
+                        to={getBackUrl()}
                         className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 inline-block"
                     >
-                        Back to Search
+                        Back to {isAdmin ? 'Vehicles' : 'Search'}
                     </Link>
                 </div>
             </div>
@@ -179,10 +184,10 @@ function VehicleReviews() {
             <div className="max-w-4xl mx-auto">
                 <div className="mb-6">
                     <Link 
-                        to="/search"
+                        to={getBackUrl()}
                         className="text-blue-600 hover:text-blue-800"
                     >
-                        ← Back to Search
+                        ← Back to {isAdmin ? 'Vehicles' : 'Search'}
                     </Link>
                 </div>
                 
@@ -201,7 +206,7 @@ function VehicleReviews() {
                                 {vehicle.brand} {vehicle.model}
                             </h1>
                             <p className="text-gray-600 mb-4">
-                                {vehicle.type} • {vehicle.color} • {vehicle.year} • {vehicle.transmission}
+                                {vehicle.type} • {vehicle.color} • {vehicle.year} • {vehicle.transmission} • {vehicle.vehicle_no_plate}
                             </p>
                             <div className="flex items-center mb-4">
                                 <div className="flex mr-2">
@@ -267,4 +272,4 @@ function VehicleReviews() {
     );
 }
 
-export default VehicleReviews; 
+export default VehicleReviews;

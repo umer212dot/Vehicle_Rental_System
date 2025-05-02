@@ -11,12 +11,14 @@ import Register from "./components/Register"
 import Payment from "./components/Payment"
 import VehicleReviews from "./components/VehicleReviews"
 import AdminLayout from "./components/AdminLayout"
-import AdminDashboard from "./components/AdminDashboard"
 import MaintenanceManagement from "./components/MaintenanceManagement"
 import VehicleMaintenanceTracker from "./components/VehicleMaintenanceTracker"
 import MaintenanceScheduler from "./components/MaintenanceScheduler"
 import AdminBookings from "./components/AdminBookings"
 import AdminSearch from "./components/AdminSearch"
+import AdminVehicles from './components/AdminVehicles'
+import UpdateVehicle from './components/UpdateVehicle'
+import AddVehicle from './components/AddVehicle'
 
 function App() {
   return (
@@ -30,7 +32,7 @@ function App() {
 
           {/* Admin Routes */}
           <Route element={<AdminLayout />}>
-            <Route path="/admin/dashboard" element={<AdminDashboard />} />
+            <Route path="/admin/dashboard" element={<Dashboard />} />
             <Route path="/admin/bookings" element={<AdminBookings />} />
             <Route path="/admin/search" element={<AdminSearch />} />
             <Route path="/admin/maintenance" element={<MaintenanceManagement />} />
@@ -38,6 +40,9 @@ function App() {
             <Route path="/admin/vehicle-maintenance/:vehicleId" element={<VehicleMaintenanceTracker />} />
             <Route path="/admin/add-maintenance/:vehicleId" element={<VehicleMaintenanceTracker />} />
             <Route path="/admin/maintenance-scheduler" element={<MaintenanceScheduler />} />
+            <Route path="/admin/vehicles" element={<AdminVehicles />} />
+            <Route path="/admin/add-vehicle" element={<AddVehicle />} />
+            <Route path="/admin/edit-vehicle/:vehicleId" element={<UpdateVehicle />} />
           </Route>
 
           {/* Customer Routes */}

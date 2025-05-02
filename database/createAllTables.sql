@@ -1,7 +1,7 @@
 CREATE TYPE rental_status AS ENUM ('Ongoing', 'Completed', 'Cancelled');
 ALTER TYPE rental_status ADD VALUE 'Pending';
 ALTER TYPE rental_status ADD VALUE 'Awaiting Approval';
-
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TYPE payment_status AS ENUM ('Pending', 'Completed', 'Failed');
 CREATE TYPE user_type AS ENUM ('Customer', 'Admin');
 -- Table: public.users
@@ -10,7 +10,7 @@ CREATE TYPE user_type AS ENUM ('Customer', 'Admin');
 CREATE TABLE IF NOT EXISTS public.users
 (
     email character varying(100) COLLATE pg_catalog."default" NOT NULL,
-    password_hash character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    password_hash text COLLATE pg_catalog."default" NOT NULL,
     role user_type NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     user_id serial NOT NULL,
@@ -56,6 +56,7 @@ ALTER TABLE IF EXISTS public.customer
 CREATE TABLE IF NOT EXISTS public.vehicle
 (
     vehicle_id serial NOT NULL,
+    vehicle_no_plate character varying(20) COLLATE pg_catalog."default" NOT NULL UNIQUE,
     model character varying(100) COLLATE pg_catalog."default" NOT NULL,
     type character varying(50) COLLATE pg_catalog."default" NOT NULL,
     price_per_day numeric(10,2) NOT NULL,
@@ -72,6 +73,7 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public.vehicle
     OWNER to postgres;
+
 	
 -- Table: public.rental
 -- DROP TABLE IF EXISTS public.rental;
@@ -205,4 +207,30 @@ CREATE TABLE IF NOT EXISTS public.admin
 TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public.admin
+    OWNER to postgres;
+
+-- Create enum type for activity
+CREATE TYPE activity_type AS ENUM ('added', 'deleted', 'updated');
+
+-- Table: public.admin_logs
+-- DROP TABLE IF EXISTS public.admin_logs;
+
+CREATE TABLE IF NOT EXISTS public.admin_logs
+(
+    log_id serial NOT NULL,
+    admin_id integer NOT NULL,
+    vehicle_id integer NOT NULL,
+    timestamp timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    activity activity_type NOT NULL,
+    description text COLLATE pg_catalog."default" NOT NULL,
+    CONSTRAINT admin_logs_pkey PRIMARY KEY (log_id),
+    CONSTRAINT admin_logs_admin_id_fkey FOREIGN KEY (admin_id)
+        REFERENCES public.admin (admin_id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public.admin_logs
     OWNER to postgres;

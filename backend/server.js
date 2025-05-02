@@ -20,6 +20,22 @@ app.use((req, res, next) => {
   next();
 });
 
+// Admin authentication middleware
+const adminAuthMiddleware = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'No authentication token provided' });
+  }
+
+  const role = authHeader.split(' ')[1];
+  if (role !== 'Admin') {
+    return res.status(401).json({ error: 'Unauthorized. Admin access required.' });
+  }
+
+  next();
+};
+
 //insert
 app.post('/test', async (req, res) => {
   const { text } = req.body
@@ -216,6 +232,7 @@ app.get('/rentals/all', async (req, res) => {
         color: row.color,
         year: row.year,
         price_per_day: row.price_per_day,
+        vehicle_no_plate: row.vehicle_no_plate,
         image_path: row.image_path,
         transmission: row.transmission,
         availability: row.availability
@@ -359,7 +376,7 @@ app.post('/register', async (req, res) => {
       // Insert user record
       console.log('Inserting user record');
       const userResult = await client.query(
-        'INSERT INTO users (email, password_hash, role, created_at) VALUES ($1, $2, $3, CURRENT_TIMESTAMP) RETURNING *',
+        'INSERT INTO users (email, password_hash, role, created_at) VALUES ($1, crypt($2,gen_salt(\'bf\')), $3, CURRENT_TIMESTAMP) RETURNING *',
         [email, password, role]
       );
       
@@ -406,8 +423,8 @@ app.post('/login', async (req, res) => {
 
     // Check if user exists
     const userResult = await pool.query(
-      'SELECT * FROM users WHERE email = $1',
-      [email]
+      'SELECT *, password_hash = crypt($2,password_hash) as is_valid FROM users WHERE email = $1',
+      [email,password]
     );
 
     if (userResult.rows.length === 0) {
@@ -419,7 +436,7 @@ app.post('/login', async (req, res) => {
     // In a real application, you would verify the password hash here
     // For simplicity, we're just checking if the password matches directly
     // This is NOT secure for a production environment
-    if (user.password_hash !== password) {
+    if (!user.is_valid) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
@@ -497,6 +514,7 @@ app.get('/rentals/customer/:customer_id', async (req, res) => {
         color: row.color,
         year: row.year,
         price_per_day: row.price_per_day,
+        vehicle_no_plate: row.vehicle_no_plate,
         image_path: row.image_path,
         transmission: row.transmission,
         availability: row.availability
@@ -778,6 +796,71 @@ app.get('/vehicles/:vehicle_id/reviews', async (req, res) => {
   } catch (error) {
     console.error('Error getting vehicle reviews:', error);
     res.status(500).json({ error: 'Failed to get vehicle reviews', details: error.message });
+  }
+});
+
+
+// Get popular vehicles
+app.get('/analytics/popular-vehicles', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        v.vehicle_id,
+        v.brand,
+        v.model,
+        v.image_path,
+        COUNT(r.rental_id) as rental_count
+      FROM vehicle v
+      LEFT JOIN rental r ON v.vehicle_id = r.vehicle_id and r.status != 'Cancelled'
+      GROUP BY v.vehicle_id, v.brand, v.model, v.image_path
+      ORDER BY rental_count DESC
+      LIMIT 5
+    `);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error getting popular vehicles:', error);
+    res.status(500).json({ error: 'Failed to get popular vehicles', details: error.message });
+  }
+});
+
+// Get vehicle type distribution
+app.get('/analytics/vehicle-types', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        type,
+        COUNT(*) as count
+      FROM vehicle
+      GROUP BY type
+      ORDER BY count DESC
+    `);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error getting vehicle type distribution:', error);
+    res.status(500).json({ error: 'Failed to get vehicle type distribution', details: error.message });
+  }
+});
+
+// Get revenue data
+app.get('/analytics/revenue', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        DATE_TRUNC('month', p.payment_date) as month,
+        SUM(p.amount) as total_revenue
+      FROM payment p
+      WHERE p.payment_status = 'Completed'
+      GROUP BY DATE_TRUNC('month', p.payment_date)
+      ORDER BY month DESC
+      LIMIT 12
+    `);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error getting revenue data:', error);
+    res.status(500).json({ error: 'Failed to get revenue data', details: error.message });
   }
 });
 
@@ -1091,6 +1174,34 @@ app.post('/vehicles/:vehicle_id/schedule-maintenance', async (req, res) => {
     if (!scheduled_date || !description) {
       return res.status(400).json({ error: 'Scheduled date and description are required' });
     }
+
+    // Check if the scheduled date is today or in the past
+    const scheduledDate = new Date(scheduled_date);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+
+    if (scheduledDate < tomorrow) {
+      return res.status(400).json({ 
+        error: 'Maintenance can only be scheduled for dates after today' 
+      });
+    }
+
+    // Check for booking conflicts
+    const bookingConflictQuery = `
+      SELECT * FROM rental 
+      WHERE vehicle_id = $1 
+      AND status NOT IN ('Cancelled', 'Completed')
+      AND $2 BETWEEN rental_date AND return_date
+    `;
+    
+    const bookingResult = await pool.query(bookingConflictQuery, [vehicle_id, scheduled_date]);
+    
+    if (bookingResult.rows.length > 0) {
+      return res.status(409).json({ 
+        error: 'Cannot schedule maintenance during an active rental period' 
+      });
+    }
     
     // Start a transaction
     const client = await pool.connect();
@@ -1131,6 +1242,25 @@ app.post('/vehicles/:vehicle_id/schedule-maintenance', async (req, res) => {
   } catch (error) {
     console.error('Error scheduling maintenance:', error);
     res.status(500).json({ error: 'Failed to schedule maintenance', details: error.message });
+  }
+});
+
+app.get('/rentals/vehicle/:vehicle_id', async (req, res) => {
+  try {
+    const { vehicle_id } = req.params;
+    
+    const query = `
+      SELECT * FROM rental 
+      WHERE vehicle_id = $1 
+      AND status NOT IN ('Cancelled', 'Completed')
+      ORDER BY rental_date ASC
+    `;
+    
+    const result = await pool.query(query, [vehicle_id]);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching vehicle bookings:', error);
+    res.status(500).json({ error: 'Failed to fetch vehicle bookings' });
   }
 });
 
@@ -1323,6 +1453,11 @@ app.put('/maintenance/:maintenanceId/status', async (req, res) => {
     if (currentRecord.rows[0].status === 'Ongoing') {
       return res.status(403).json({ 
         error: 'Cannot cancel ongoing maintenance. Please complete the maintenance process first.' 
+      });
+    }
+    if (currentRecord.rows[0].status === 'Completed') {
+      return res.status(403).json({ 
+        error: 'Cannot cancel completed maintenance.' 
       });
     }
     
@@ -1615,3 +1750,242 @@ const updateAllMaintenanceStatuses = async () => {
 
 // Start the maintenance status update scheduler when the server starts
 scheduleMaintenanceStatusUpdates();
+
+// Get available popular vehicles (for customer suggestions)
+app.get('/analytics/available-popular-vehicles', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        v.vehicle_id,
+        v.brand,
+        v.model,
+        v.image_path,
+        v.price_per_day,
+        COUNT(r2.rental_id) as rental_count
+      FROM vehicle v
+      LEFT JOIN rental r2 ON v.vehicle_id = r2.vehicle_id AND r2.status != 'Cancelled'
+      WHERE v.availability = true
+      AND NOT EXISTS (
+        SELECT 1 
+        FROM rental r
+        WHERE r.vehicle_id = v.vehicle_id 
+        AND r.status = 'Ongoing'
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM maintenance_record mr
+        WHERE mr.vehicle_id = v.vehicle_id 
+        AND mr.status IN ('In Progress', 'Scheduled')
+      )
+      GROUP BY v.vehicle_id, v.brand, v.model, v.image_path, v.price_per_day
+      ORDER BY COUNT(r2.rental_id) DESC
+      LIMIT 5
+    `);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error getting available popular vehicles:', error);
+    res.status(500).json({ error: 'Failed to get available popular vehicles', details: error.message });
+  }
+});
+
+// Get a single vehicle by ID
+app.get('/vehicles/:vehicle_id', async (req, res) => {
+  try {
+    const { vehicle_id } = req.params;
+    const vehicleResult = await pool.query(
+      'SELECT * FROM vehicle WHERE vehicle_id = $1',
+      [vehicle_id]
+    );
+    
+    if (vehicleResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Vehicle not found' });
+    }
+    
+    res.json(vehicleResult.rows[0]);
+  } catch (error) {
+    console.error('Error fetching vehicle:', error);
+    res.status(500).json({ error: 'Failed to fetch vehicle', details: error.message });
+  }
+});
+
+// Update a vehicle - Add adminAuthMiddleware
+app.put('/vehicles/:vehicle_id', adminAuthMiddleware, async (req, res) => {
+  try {
+    const { vehicle_id } = req.params;
+    const { color, price_per_day, image_path, admin_id } = req.body; // Only allow these fields to be updated
+    console.log('Admin ID:', admin_id);
+    // Check if vehicle exists
+    const vehicleCheck = await pool.query(
+      'SELECT * FROM vehicle WHERE vehicle_id = $1',
+      [vehicle_id]
+    );
+
+    if (vehicleCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Vehicle not found' });
+    }
+
+    // Check if vehicle has active bookings
+    const activeBookingsQuery = `
+      SELECT COUNT(*) 
+      FROM rental 
+      WHERE vehicle_id = $1 
+      AND status IN ('Ongoing', 'Awaiting Approval', 'Pending')
+    `;
+    const activeBookings = await pool.query(activeBookingsQuery, [vehicle_id]);
+
+    if (parseInt(activeBookings.rows[0].count) > 0) {
+      return res.status(400).json({ error: 'Cannot update vehicle with active bookings' });
+    }
+
+    // If all checks pass, proceed with update (only allowed fields)
+    const updateQuery = `
+      UPDATE vehicle 
+      SET color = COALESCE($1, color), 
+          price_per_day = COALESCE($2, price_per_day), 
+          image_path = COALESCE($3, image_path)
+      WHERE vehicle_id = $4
+      RETURNING *
+    `;
+
+    const result = await pool.query(updateQuery, [
+      color, 
+      price_per_day, 
+      image_path, 
+      vehicle_id
+    ]);
+
+    // Log the update of a vehicle
+    const logQuery = `
+      INSERT INTO admin_logs (admin_id, vehicle_id, activity, description)
+      VALUES ($1, $2, $3, $4)
+    `;
+    const logValues = [
+      admin_id,
+      vehicle_id,
+      'updated',
+      `Updated car: ID ${vehicle_id}`
+    ];
+    await pool.query(logQuery, logValues);
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating vehicle:', error);
+    res.status(500).json({ error: 'Failed to update vehicle', details: error.message });
+  }
+});
+
+// Delete a vehicle
+app.delete('/vehicles/:vehicle_id', async (req, res) => {
+  try {
+    const { vehicle_id} = req.params;
+    const { admin_id } = req.body;
+    console.log('Admin ID:', admin_id);
+
+    // Check if vehicle has any active rentals
+    const activeRentals = await pool.query(
+      `SELECT * FROM rental 
+       WHERE vehicle_id = $1 
+       AND status IN ('Awaiting Approval', 'Pending', 'Ongoing')`,
+      [vehicle_id]
+    );
+
+    if (activeRentals.rows.length > 0) {
+      return res.status(400).json({ 
+        error: 'Cannot delete vehicle with active rentals',
+        activeRentals: activeRentals.rows
+      });
+    }
+
+    // Check if vehicle has any scheduled maintenance
+    const scheduledMaintenance = await pool.query(
+      `SELECT * FROM maintenance_record 
+       WHERE vehicle_id = $1 
+       AND status IN ('Scheduled', 'In Progress')`,
+      [vehicle_id]
+    );
+
+    if (scheduledMaintenance.rows.length > 0) {
+      return res.status(400).json({ 
+        error: 'Cannot delete vehicle with scheduled or ongoing maintenance',
+        scheduledMaintenance: scheduledMaintenance.rows
+      });
+    }
+
+    // Delete the vehicle if no active rentals or maintenance
+    const deleteVehicle = await pool.query(
+      'DELETE FROM vehicle WHERE vehicle_id = $1 RETURNING *',
+      [vehicle_id]
+    );
+
+    if (deleteVehicle.rows.length === 0) {
+      return res.status(404).json({ error: 'Vehicle not found' });
+    }
+
+    // Log the deletion of a vehicle
+    const logQuery = `
+      INSERT INTO admin_logs (admin_id, vehicle_id, activity, description)
+      VALUES ($1, $2, $3, $4)
+    `;
+    const logValues = [
+      admin_id,
+      vehicle_id,
+      'deleted',
+      `Deleted car: ID ${vehicle_id} `
+    ];
+    await pool.query(logQuery, logValues);
+
+    res.json({ 
+      message: 'Vehicle deleted successfully',
+      deletedVehicle: deleteVehicle.rows[0]
+    });
+  } catch (error) {
+    console.error('Error deleting vehicle:', error);
+    res.status(500).json({ error: 'Failed to delete vehicle', details: error.message });
+  }
+});
+
+// Create a new vehicle - Add adminAuthMiddleware
+app.post('/vehicles', adminAuthMiddleware, async (req, res) => {
+  try {
+    const { brand, model, type, color, transmission, year, price_per_day,vehicle_no_plate, image_path, admin_id} = req.body;
+    // Validate required fields
+    if (!brand || !model || !type || !color || !transmission || !year || !price_per_day) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    // Insert new vehicle
+    const query = `
+      INSERT INTO vehicle (
+        brand, model, type, color, transmission, year, 
+        price_per_day, image_path, availability,vehicle_no_plate
+      ) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9)
+      RETURNING *
+    `;
+
+    const result = await pool.query(query, [
+      brand, model, type, color, transmission, year,
+      price_per_day, image_path,vehicle_no_plate
+    ]);
+
+    // Log the addition of a new vehicle
+    const logQuery = `
+      INSERT INTO admin_logs (admin_id, vehicle_id, activity, description)
+      VALUES ($1, $2, $3, $4)
+    `;
+    const logValues = [
+      admin_id, // Assuming admin_id is available in the request
+      result.rows[0].vehicle_id,
+      'added',
+      `Added car: ${brand} ${model}, No Plate: ${vehicle_no_plate}`
+    ];
+    await pool.query(logQuery, logValues);
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating vehicle:', error);
+    res.status(500).json({ error: 'Failed to create vehicle', details: error.message });
+  }
+});
+

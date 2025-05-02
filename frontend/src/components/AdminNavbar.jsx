@@ -30,8 +30,8 @@ const AdminNavbar = () => {
                 <Link to="/admin/bookings" className="px-3 py-2 hover:bg-[#004080] rounded-md">
                   Bookings
                 </Link>
-                <Link to="/admin/search" className="px-3 py-2 hover:bg-[#004080] rounded-md">
-                  Search
+                <Link to="/admin/vehicles" className="px-3 py-2 hover:bg-[#004080] rounded-md">
+                  Vehicles
                 </Link>
                 <Link to="/admin/maintenance" className="px-3 py-2 hover:bg-[#004080] rounded-md">
                   Maintenance Management
@@ -73,11 +73,11 @@ const AdminNavbar = () => {
               Bookings
             </Link>
             <Link
-              to="/admin/search"
+              to="/admin/vehicles"
               className="block px-3 py-2 hover:bg-[#004080] rounded-md"
               onClick={() => setIsMenuOpen(false)}
             >
-              Search
+              Vehicles
             </Link>
             <Link
               to="/admin/maintenance"
@@ -100,4 +100,4 @@ const AdminNavbar = () => {
   );
 };
 
-export default AdminNavbar; 
+export default AdminNavbar;
