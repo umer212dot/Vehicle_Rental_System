@@ -14,7 +14,7 @@ BEGIN
 
     -- Update Ongoing
     UPDATE public.maintenance_record
-    SET status = 'Due Today'
+    SET status = 'Ongoing'
     WHERE maintenance_date = current_date_value;
 
     -- Update Scheduled

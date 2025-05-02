@@ -214,11 +214,11 @@ const MaintenanceScheduleModal = ({ vehicle, isOpen, onClose, onSchedule, existi
 
 const MaintenanceScheduler = () => {
   // Sample data for dropdowns - same as VehicleMaintenanceTracker for consistency
-  const brands = ["All Brands", "Volvo", "BMW", "Audi", "Mercedes", "Toyota", "Honda"];
+  const brands = ["All Brands", "Toyota", "BMW", "Audi", "Mercedes", "Ford", "Honda","Tesla","KTM","Hyundai"]
+  const types = ["All Types", "Sedan","Truck","Bike", "SUV", "Hatchback", "Convertible", "Hybrid"]
+  const colors = ["All Colors", "Black", "White", "Silver", "Blue", "Red", "Gray",'Orange']
+  const transmissions = ["All Transmissions", "Automatic", "Manual"]
   const [models, setModels] = useState(["All Models"]);
-  const types = ["All Types", "Sedan", "SUV", "Hatchback", "Convertible", "Hybrid"];
-  const colors = ["All Colors", "Black", "White", "Silver", "Blue", "Red", "Gray"];
-  const transmissions = ["All Transmissions", "Automatic", "Manual"];
   
   // Maintenance types
   const maintenanceTypes = [

@@ -176,7 +176,7 @@ ALTER TABLE IF EXISTS public.maintenance_record
     OWNER to postgres;
 
 -- Step 1: Create an ENUM type with the four status options
-CREATE TYPE maintenance_status AS ENUM ('Scheduled', 'In Progress', 'Completed', 'Cancelled');
+CREATE TYPE maintenance_status AS ENUM ('Scheduled', 'Ongoing', 'Completed', 'Cancelled');
 
 -- Step 2: Add the status column to the maintenance_record table
 ALTER TABLE public.maintenance_record
