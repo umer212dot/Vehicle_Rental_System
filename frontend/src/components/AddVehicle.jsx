@@ -20,10 +20,10 @@ const AddVehicle = () => {
     });
 
     // Predefined options for dropdowns
-    const types = ["Sedan", "SUV", "Hatchback", "Convertible", "Hybrid"];
-    const colors = ["Black", "White", "Silver", "Blue", "Red", "Gray"];
-    const transmissions = ["Automatic", "Manual"];
-    const brands = ["Volvo", "BMW", "Audi", "Mercedes", "Toyota", "Honda"];
+    const brands = ["All Brands", "Toyota", "BMW", "Audi", "Mercedes", "Ford", "Honda","Tesla","KTM","Hyundai"]
+    const types = ["All Types", "Sedan","Truck","Bike", "SUV", "Hatchback", "Convertible", "Hybrid"]
+    const colors = ["All Colors", "Black", "White", "Silver", "Blue", "Red", "Gray",'Orange']
+    const transmissions = ["All Transmissions", "Automatic", "Manual"]
 
     useEffect(() => {
         // Check if user is admin

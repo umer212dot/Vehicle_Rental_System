@@ -6,11 +6,11 @@ import CarDetailsCard from "./CarDetailsCard"
 
 const SearchPage = () => {
   // Sample data for dropdowns
-  const brands = ["All Brands", "Volvo", "BMW", "Audi", "Mercedes", "Toyota", "Honda"]
-  const [models, setModels] = useState(["All Models"]) //get all models from the database
-  const types = ["All Types", "Sedan", "SUV", "Hatchback", "Convertible", "Hybrid"]
-  const colors = ["All Colors", "Black", "White", "Silver", "Blue", "Red", "Gray"]
+  const brands = ["All Brands", "Toyota", "BMW", "Audi", "Mercedes", "Ford", "Honda","Tesla","KTM","Hyundai"]
+  const types = ["All Types", "Sedan","Truck","Bike", "SUV", "Hatchback", "Convertible", "Hybrid"]
+  const colors = ["All Colors", "Black", "White", "Silver", "Blue", "Red", "Gray",'Orange']
   const transmissions = ["All Transmissions", "Automatic", "Manual"]
+  const [models, setModels] = useState(["All Models"]) //get all models from the database
 
   // State for loading
   const [isLoading, setIsLoading] = useState(false)

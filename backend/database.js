@@ -5,7 +5,7 @@ const pool = new Pool({
     password: 'guccigamer22',
     host: 'localhost',
     port: 5432,
-    database: 'papletDB',
+    database: 'Vehicle_Rental_System',
 })
 
 module.exports = pool

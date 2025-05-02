@@ -1775,7 +1775,7 @@ app.get('/analytics/available-popular-vehicles', async (req, res) => {
         SELECT 1
         FROM maintenance_record mr
         WHERE mr.vehicle_id = v.vehicle_id 
-        AND mr.status IN ('In Progress', 'Scheduled')
+        AND mr.status IN ('Ongoing', 'Scheduled')
       )
       GROUP BY v.vehicle_id, v.brand, v.model, v.image_path, v.price_per_day
       ORDER BY COUNT(r2.rental_id) DESC
